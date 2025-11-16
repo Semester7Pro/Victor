@@ -26,3 +26,5 @@ python-dotenv==1.0.0
 
 # Optional: Supabase (for future use)
 # supabase==2.3.0
+
+supabase

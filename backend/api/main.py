@@ -25,7 +25,7 @@ app.add_middleware(
 app.include_router(collections.router, prefix="/api/collections", tags=["Collections"])
 app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
 app.include_router(upload.router, prefix="/api/upload", tags=["Upload"])
-app.include_router(upload.router, prefix="", tags=["Upload"])  # Also include at root for /upload-callback
+# app.include_router(upload.router, prefix="", tags=["Upload"])  # Also include at root for /upload-callback
 app.include_router(search.router, prefix="/api/search", tags=["Search"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 

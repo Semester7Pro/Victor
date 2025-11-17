@@ -56,7 +56,7 @@ export default function Upload() {
 
     console.log("📨 Sending payload to backend /upload-callback:", payload);
 
-    const response = await fetch("http://localhost:8000/upload-callback", {
+    const response = await fetch("http://localhost:8000/api/upload/upload-callback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

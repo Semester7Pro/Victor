@@ -36,3 +36,4 @@ async def upload_document(file: UploadFile = File(...)):
 async def list_documents():
     """List all documents"""
     return {"documents": documents_db, "total": len(documents_db)}
+

@@ -3,7 +3,7 @@
 from google.oauth2.credentials import Credentials
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
 from typing import List, Dict, Optional, Any
 import io
 import os
@@ -44,7 +44,7 @@ def get_drive_service():
             raise FileNotFoundError(f"Service account file not found: {creds_file}")
         
         # Create credentials from service account file
-        scopes = ['https://www.googleapis.com/auth/drive.readonly']
+        scopes = ['https://www.googleapis.com/auth/drive']
         creds = service_account.Credentials.from_service_account_file(
             creds_file, scopes=scopes
         )
@@ -81,7 +81,9 @@ def list_files_in_folder(folder_id: str, page_size: int = 100) -> List[Dict[str,
                 q=query,
                 pageSize=page_size,
                 fields=fields,
-                pageToken=page_token
+                pageToken=page_token,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True
             ).execute()
             
             files.extend(response.get('files', []))
@@ -157,7 +159,7 @@ def download_file(file_id: str, destination_path: Path) -> bool:
         destination_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Request file download
-        request = service.files().get_media(fileId=file_id)
+        request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
         
         # Download file in chunks
         fh = io.BytesIO()
@@ -189,7 +191,7 @@ def get_file_metadata(file_id: str) -> Optional[Dict[str, Any]]:
     
     try:
         fields = "id, name, mimeType, size, modifiedTime, md5Checksum, parents"
-        file_meta = service.files().get(fileId=file_id, fields=fields).execute()
+        file_meta = service.files().get(fileId=file_id, fields=fields, supportsAllDrives=True).execute()
         return file_meta
     except Exception as e:
         print(f"Error getting metadata for file {file_id}: {e}")
@@ -266,7 +268,9 @@ def get_changes_since(start_page_token: str) -> List[Dict[str, Any]]:
             response = service.changes().list(
                 pageToken=page_token,
                 spaces='drive',
-                fields='nextPageToken, newStartPageToken, changes(fileId, file(id, name, mimeType, size, modifiedTime, md5Checksum))'
+                fields='nextPageToken, newStartPageToken, changes(fileId, file(id, name, mimeType, size, modifiedTime, md5Checksum))',
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True
             ).execute()
             
             for change in response.get('changes', []):
@@ -295,8 +299,141 @@ def get_start_page_token() -> Optional[str]:
     service = get_drive_service()
     
     try:
-        response = service.changes().getStartPageToken().execute()
+        response = service.changes().getStartPageToken(supportsAllDrives=True).execute()
         return response.get('startPageToken')
     except Exception as e:
         print(f"Error getting start page token: {e}")
         return None
+
+
+def upload_file(file_path: Path, folder_id: str, filename: Optional[str] = None) -> Optional[str]:
+    """
+    Upload a file to Google Drive (supports Shared Drives)
+    
+    Args:
+        file_path: Local file path to upload
+        folder_id: Google Drive folder ID to upload to
+        filename: Optional custom filename (defaults to file_path.name)
+        
+    Returns:
+        Google Drive file ID if successful, None otherwise
+    """
+    service = get_drive_service()
+    
+    try:
+        if not file_path.exists():
+            print(f"File not found: {file_path}")
+            return None
+        
+        file_metadata = {
+            'name': filename or file_path.name,
+            'parents': [folder_id]
+        }
+        
+        media = MediaFileUpload(str(file_path), resumable=True)
+        
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id, name, size',
+            supportsAllDrives=True
+        ).execute()
+        
+        file_id = file.get('id')
+        print(f"Uploaded {file_metadata['name']} to Drive (ID: {file_id})")
+        return file_id
+        
+    except Exception as e:
+        print(f"Error uploading file: {e}")
+        return None
+
+
+def create_folder(folder_name: str, parent_folder_id: str) -> Optional[str]:
+    """
+    Create a folder in Google Drive (supports Shared Drives)
+    
+    Args:
+        folder_name: Name of the folder to create
+        parent_folder_id: Parent folder ID
+        
+    Returns:
+        Google Drive folder ID if successful, None otherwise
+    """
+    service = get_drive_service()
+    
+    try:
+        file_metadata = {
+            'name': folder_name,
+            'mimeType': 'application/vnd.google-apps.folder',
+            'parents': [parent_folder_id]
+        }
+        
+        folder = service.files().create(
+            body=file_metadata,
+            fields='id, name',
+            supportsAllDrives=True
+        ).execute()
+        
+        folder_id = folder.get('id')
+        print(f"Created folder '{folder_name}' (ID: {folder_id})")
+        return folder_id
+        
+    except Exception as e:
+        print(f"Error creating folder: {e}")
+        return None
+
+
+def check_folder_location(folder_id: str) -> Dict[str, Any]:
+    """
+    Check if a folder is in a Shared Drive or regular My Drive
+    
+    Args:
+        folder_id: Google Drive folder ID to check
+        
+    Returns:
+        Dictionary with folder location info
+    """
+    service = get_drive_service()
+    
+    try:
+        # Get folder metadata including driveId
+        file_meta = service.files().get(
+            fileId=folder_id,
+            fields='id, name, driveId, parents, capabilities',
+            supportsAllDrives=True
+        ).execute()
+        
+        is_shared_drive = 'driveId' in file_meta and file_meta['driveId'] is not None
+        
+        result = {
+            'id': file_meta.get('id'),
+            'name': file_meta.get('name'),
+            'is_shared_drive': is_shared_drive,
+            'drive_id': file_meta.get('driveId'),
+            'parents': file_meta.get('parents', []),
+            'can_edit': file_meta.get('capabilities', {}).get('canEdit', False)
+        }
+        
+        print(f"\n{'='*60}")
+        print(f"Folder: {result['name']}")
+        print(f"ID: {result['id']}")
+        print(f"Location: {'Shared Drive' if is_shared_drive else 'My Drive (Personal)'}")
+        if is_shared_drive:
+            print(f"Shared Drive ID: {result['drive_id']}")
+        print(f"Can Edit: {result['can_edit']}")
+        print(f"{'='*60}\n")
+        
+        if not is_shared_drive:
+            print("⚠️  WARNING: This folder is in My Drive, not a Shared Drive!")
+            print("   Service accounts CANNOT upload to My Drive folders.")
+            print("   You must use a Shared Drive instead.")
+            print("\n   Steps to fix:")
+            print("   1. Create a Shared Drive in Google Drive")
+            print("   2. Share it with your service account email")
+            print("   3. Update GOOGLE_DRIVE_MASTER_FOLDER_ID with the Shared Drive folder ID")
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error checking folder location: {e}")
+        return {}

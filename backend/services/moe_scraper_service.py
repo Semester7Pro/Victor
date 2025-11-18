@@ -110,6 +110,9 @@ class MoEScraperService:
         self.drive_service = drive_service
         self.master_folder_id = master_folder_id
         
+        # Detect and cache the Shared Drive ID
+        self.shared_drive_id = self._get_shared_drive_id()
+        
         # Cache of existing files in Drive (folder_name -> set of filenames)
         self.existing_files_cache: Dict[str, Set[str]] = {}
         
@@ -132,6 +135,36 @@ class MoEScraperService:
             "errors": []
         }
     
+    def _get_shared_drive_id(self) -> Optional[str]:
+        """
+        Get the Shared Drive ID for the master folder
+        
+        Returns None if folder is in My Drive (won't work with service accounts)
+        """
+        try:
+            file_meta = self.drive_service.files().get(
+                fileId=self.master_folder_id,
+                fields='id, name, driveId',
+                supportsAllDrives=True
+            ).execute()
+            
+            drive_id = file_meta.get('driveId')
+            folder_name = file_meta.get('name', 'Unknown')
+            
+            if drive_id:
+                print(f"✓ Detected Shared Drive: {folder_name}")
+                print(f"  Drive ID: {drive_id}")
+            else:
+                print(f"⚠️  WARNING: Folder '{folder_name}' is in My Drive, not a Shared Drive!")
+                print(f"   Service accounts cannot upload to My Drive.")
+                print(f"   Please use a folder within a Shared Drive.")
+            
+            return drive_id
+            
+        except Exception as e:
+            print(f"Error detecting Shared Drive: {e}")
+            return None
+    
     def get_folder_id(self, folder_name: str) -> Optional[str]:
         """
         Get Google Drive folder ID by name
@@ -146,7 +179,9 @@ class MoEScraperService:
             
             results = self.drive_service.files().list(
                 q=query,
-                fields='files(id, name)'
+                fields='files(id, name)',
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True
             ).execute()
             
             files = results.get('files', [])
@@ -179,7 +214,9 @@ class MoEScraperService:
                 results = self.drive_service.files().list(
                     q=query,
                     fields='nextPageToken, files(name)',
-                    pageToken=page_token
+                    pageToken=page_token,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True
                 ).execute()
                 
                 files.extend(results.get('files', []))
@@ -322,7 +359,8 @@ class MoEScraperService:
             file = self.drive_service.files().create(
                 body=file_metadata,
                 media_body=media,
-                fields='id, name, size, modifiedTime'
+                fields='id, name, size, modifiedTime',
+                supportsAllDrives=True
             ).execute()
             
             file_id = file.get('id')

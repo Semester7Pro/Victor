@@ -36,7 +36,12 @@ class CrossEncoderReranker:
         
         print(f"🔧 Loading cross-encoder reranker: {self.model_name}")
         try:
-            self.model = CrossEncoder(self.model_name, max_length=512)
+            # ✅ Add batch processing parameters
+            self.model = CrossEncoder(
+                self.model_name, 
+                max_length=512,
+                device='cpu'  # or 'cuda' if you have GPU
+            )
             print(f"✅ Cross-encoder reranker loaded successfully")
         except Exception as e:
             print(f"❌ Failed to load cross-encoder: {e}")
@@ -82,9 +87,16 @@ class CrossEncoderReranker:
                     text = text[:1000] + "..."
                 pairs.append([query, text])
             
-            # Get cross-encoder scores
-            print(f"   Computing cross-encoder scores...")
-            scores = self.model.predict(pairs)
+            # ✅ OPTIMIZATION: Batch prediction with show_progress_bar
+            import time
+            start = time.time()
+            scores = self.model.predict(
+                pairs,
+                batch_size=32,  # Process in batches
+                show_progress_bar=False  # Disable for production
+            )
+            elapsed = time.time() - start
+            print(f"   ⚡ Reranking completed in {elapsed:.2f}s")
             
             # Combine documents with scores
             scored_docs = []

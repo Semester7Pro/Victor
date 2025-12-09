@@ -6,7 +6,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from fastapi import FastAPI, HTTPException, status, Request, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, status, Request, Depends, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
@@ -18,8 +18,12 @@ from services.conversation_service import get_conversation_service
 from api.milvus_client import get_milvus_client
 from services.full_langchain_service import get_full_langchain_rag
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional
-
+from typing import List, Dict, Optional, Any
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from pymilvus import connections, utility, Collection, DataType
+import jwt
+from bson import ObjectId
 
 # Load .env from project root
 env_path = Path(__file__).parent.parent / ".env"
@@ -46,40 +50,42 @@ import json
 from backend.api.routers import auth
 
 # Lifespan context manager for startup/shutdown
+executor = ThreadPoolExecutor(max_workers=2)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    print("🚀 Starting up API...")
-    try:
-        get_milvus_client()  # Initialize Milvus connection
-        print("✅ Milvus client initialized")
-    except Exception as e:
-        print(f"⚠️  Milvus initialization warning: {e}")
-        # Don't fail startup, Milvus is optional
+    """Fast startup with background loading"""
+    print("🚀 Starting up API (fast mode)...")
     
-    try:
-        get_llm_client()  # Initialize OpenRouter client
-        print("✅ LLM client (OpenRouter) initialized")
-    except Exception as e:
-        print(f"⚠️  LLM client initialization warning: {e}")
-        # Don't fail startup, LLM is optional
-    
-    try:
-        get_speech_service()  # Initialize Speech service
-        print("✅ Speech service (ElevenLabs) initialized")
-    except Exception as e:
-        print(f"⚠️  Speech service initialization warning: {e}")
-        # Don't fail startup, Speech is optional
-    
-    # Test role system
-    print("🎭 ROLE SYSTEM: Loading role-based configurations...")
-    from services.role_config import ROLE_CONFIGS
-    print(f"🎭 ROLE SYSTEM: {len(ROLE_CONFIGS)} roles loaded: {list(ROLE_CONFIGS.keys())}")
+    # Start background loading
+    asyncio.create_task(preload_models_background())
     
     yield
     
-    # Shutdown
     print("👋 Shutting down API...")
+    executor.shutdown(wait=False)
+
+async def preload_models_background():
+    """Load heavy models in background"""
+    await asyncio.sleep(2)  # Let API start first
+    
+    print("🔄 Background: Loading models...")
+    loop = asyncio.get_event_loop()
+    
+    # Load in parallel
+    await asyncio.gather(
+        loop.run_in_executor(executor, load_milvus_background),
+        loop.run_in_executor(executor, load_llm_background),
+    )
+    print("✅ Background: All models loaded")
+
+def load_milvus_background():
+    from api.milvus_client import get_milvus_client
+    get_milvus_client()
+
+def load_llm_background():
+    from api.llm_client import get_llm_client
+    get_llm_client()
 
 # Create FastAPI app
 app = FastAPI(
@@ -899,3 +905,231 @@ class RAGRequest(BaseModel):
     ministry: Optional[str] = None  # ✅ ADD THIS LINE
     date_from: Optional[str] = None
     date_to: Optional[str] = None
+
+# ========== MILVUS MANAGEMENT ENDPOINTS (ADMIN ONLY) ==========
+
+class CollectionInfo(BaseModel):
+    name: str
+    num_entities: int
+    description: str
+
+class SchemaField(BaseModel):
+    name: str
+    type: str
+    is_primary: bool
+    auto_id: bool
+    params: Dict[str, Any]
+
+class CollectionSchema(BaseModel):
+    collection_name: str
+    description: str
+    fields: List[SchemaField]
+    indexes: List[Dict[str, Any]]
+
+class DeleteCollectionRequest(BaseModel):
+    collection_name: str
+    confirm: bool
+
+# Helper to check admin role
+async def verify_admin(authorization: str = Header(...)):
+    """Verify user is admin"""
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        # Get user from MongoDB
+        user = db.users.find_one({"_id": ObjectId(user_id)})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Check if admin
+        if user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        return user
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.get("/admin/milvus/collections", response_model=List[CollectionInfo])
+async def list_milvus_collections(user: dict = Depends(verify_admin)):
+    """List all Milvus collections (Admin only)"""
+    try:
+        connections.connect("admin", host=MILVUS_HOST, port=MILVUS_PORT, timeout=10)
+        collections = utility.list_collections()
+        
+        result = []
+        for name in collections:
+            try:
+                collection = Collection(name)
+                result.append({
+                    "name": name,
+                    "num_entities": collection.num_entities,
+                    "description": collection.description or "No description"
+                })
+            except Exception as e:
+                print(f"Error loading collection {name}: {e}")
+        
+        connections.disconnect("admin")
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list collections: {str(e)}")
+
+@app.get("/admin/milvus/collections/{collection_name}/schema", response_model=CollectionSchema)
+async def get_collection_schema(collection_name: str, user: dict = Depends(verify_admin)):
+    """Get collection schema (Admin only)"""
+    try:
+        connections.connect("admin", host=MILVUS_HOST, port=MILVUS_PORT, timeout=10)
+        
+        if not utility.has_collection(collection_name):
+            raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+        
+        collection = Collection(collection_name)
+        schema = collection.schema
+        
+        # Map DataType enums to readable names
+        dtype_map = {
+            DataType.BOOL: "BOOL",
+            DataType.INT8: "INT8",
+            DataType.INT16: "INT16",
+            DataType.INT32: "INT32",
+            DataType.INT64: "INT64",
+            DataType.FLOAT: "FLOAT",
+            DataType.DOUBLE: "DOUBLE",
+            DataType.STRING: "STRING",
+            DataType.VARCHAR: "VARCHAR",
+            DataType.BINARY_VECTOR: "BINARY_VECTOR",
+            DataType.FLOAT_VECTOR: "FLOAT_VECTOR",
+        }
+        
+        fields = []
+        for field in schema.fields:
+            fields.append({
+                "name": field.name,
+                "type": dtype_map.get(field.dtype, str(field.dtype)),
+                "is_primary": field.is_primary,
+                "auto_id": field.auto_id,
+                "params": field.params or {}
+            })
+        
+        # Get indexes
+        indexes = []
+        try:
+            for idx in collection.indexes:
+                indexes.append({
+                    "field_name": idx.field_name,
+                    "index_type": idx.params.get('index_type', 'N/A'),
+                    "metric_type": idx.params.get('metric_type', 'N/A'),
+                    "params": idx.params.get('params', {})
+                })
+        except Exception as e:
+            print(f"Error reading indexes: {e}")
+        
+        connections.disconnect("admin")
+        
+        return {
+            "collection_name": collection_name,
+            "description": schema.description or "No description",
+            "fields": fields,
+            "indexes": indexes
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get schema: {str(e)}")
+
+@app.get("/admin/milvus/collections/{collection_name}/stats")
+async def get_collection_stats(collection_name: str, user: dict = Depends(verify_admin)):
+    """Get collection statistics (Admin only)"""
+    try:
+        connections.connect("admin", host=MILVUS_HOST, port=MILVUS_PORT, timeout=10)
+        
+        if not utility.has_collection(collection_name):
+            raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+        
+        collection = Collection(collection_name)
+        
+        # Try to load collection
+        is_loaded = False
+        try:
+            collection.load()
+            is_loaded = True
+        except:
+            pass
+        
+        stats = {
+            "collection_name": collection_name,
+            "num_entities": collection.num_entities,
+            "is_loaded": is_loaded,
+            "description": collection.description or "No description"
+        }
+        
+        connections.disconnect("admin")
+        return stats
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+
+@app.get("/admin/milvus/collections/{collection_name}/sample")
+async def get_collection_sample(collection_name: str, limit: int = 5, user: dict = Depends(verify_admin)):
+    """Get sample data from collection (Admin only)"""
+    try:
+        connections.connect("admin", host=MILVUS_HOST, port=MILVUS_PORT, timeout=10)
+        
+        if not utility.has_collection(collection_name):
+            raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+        
+        collection = Collection(collection_name)
+        collection.load()
+        
+        # Get schema to determine fields
+        schema = collection.schema
+        output_fields = [
+            field.name for field in schema.fields 
+            if field.name != "id" and field.dtype != DataType.FLOAT_VECTOR
+        ]
+        
+        # Query data
+        results = collection.query(
+            expr="",
+            limit=min(limit, 10),  # Max 10 samples
+            output_fields=output_fields
+        )
+        
+        # Truncate long strings
+        for result in results:
+            for key, value in result.items():
+                if isinstance(value, str) and len(value) > 200:
+                    result[key] = value[:200] + "..."
+        
+        connections.disconnect("admin")
+        return {"samples": results, "count": len(results)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get sample data: {str(e)}")
+
+@app.delete("/admin/milvus/collections/{collection_name}")
+async def delete_collection(collection_name: str, request: DeleteCollectionRequest, user: dict = Depends(verify_admin)):
+    """Delete a collection (Admin only)"""
+    if not request.confirm:
+        raise HTTPException(status_code=400, detail="Confirmation required")
+    
+    try:
+        connections.connect("admin", host=MILVUS_HOST, port=MILVUS_PORT, timeout=10)
+        
+        if not utility.has_collection(collection_name):
+            raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+        
+        utility.drop_collection(collection_name)
+        connections.disconnect("admin")
+        
+        return {"message": f"Collection '{collection_name}' deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete collection: {str(e)}")

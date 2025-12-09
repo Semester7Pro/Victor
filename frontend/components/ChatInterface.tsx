@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import dynamic from 'next/dynamic';
+const CompareModal = dynamic(() => import('./CompareModal'), { ssr: false });
 import { useRouter } from 'next/navigation';
 import DockRoot from '@/components/Dock';
 import VoiceInput from '@/components/VoiceInput';
@@ -64,6 +66,7 @@ interface ChatInterfaceProps {
 }
 
 export default function ChatInterface({ authToken, userName = 'User' }: ChatInterfaceProps) {
+  const [compareOpen, setCompareOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<string | null>(null);
   const [currentTitle, setCurrentTitle] = useState<string>('New Chat');
@@ -984,6 +987,23 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
                     </>
                   )}
                 </button>
+
+                {/* Compare Button */}
+                <button
+                  type="button"
+                  onClick={() => setCompareOpen(true)}
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-medium transition-all shadow-lg flex items-center gap-2"
+                  title="Compare topics or documents"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 3a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2h10zm-7 7h4m-4 4h4" />
+                  </svg>
+                  <span className="hidden sm:inline">Compare</span>
+                </button>
+                    {/* Compare Modal */}
+                    {compareOpen && (
+                      <CompareModal authToken={authToken} onClose={() => setCompareOpen(false)} />
+                    )}
               </form>
 
               {/* Language hint */}

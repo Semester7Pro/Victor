@@ -1,11 +1,13 @@
 {
   "dependencies": {
+    "@hocuspocus/server": "^3.4.0",
     "@motionone/react": "^10.16.4",
     "framer-motion": "^12.23.25",
     "motion": "^12.23.25",
     "uuid": "^13.0.0",
     "ws": "^8.18.3",
-    "y-websocket": "^3.0.0"
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.27"
   },
   "type": "module"
 }

@@ -43,7 +43,7 @@ export default function CollaborativeEditor({
     ydocRef.current = ydoc;
 
     // Use Yjs demo websocket for development. Replace with your server in prod.
-    const wsUrl = "wss://demos.yjs.dev";
+    const wsUrl = "ws://localhost:1234";
     const provider = new WebsocketProvider(wsUrl, roomId, ydoc);
     providerRef.current = provider;
 

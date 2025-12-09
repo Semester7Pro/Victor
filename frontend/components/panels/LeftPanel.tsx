@@ -93,6 +93,7 @@ export function LeftPanel() {
         body: JSON.stringify({
           query: userQuestion,
           conversation_id: currentConversationId,
+          method: "hybrid",
           top_k: 5,
           temperature: 0.1,
         }),

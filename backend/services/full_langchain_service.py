@@ -230,7 +230,15 @@ class OpenRouterLLM:
             
             if response.status_code == 200:
                 result = response.json()
-                return result["choices"][0]["message"]["content"]
+                content = result["choices"][0]["message"]["content"]
+                # Clean up formatting issues
+                content = content.strip()
+                # Remove excessive newlines
+                import re
+                content = re.sub(r'\n{3,}', '\n\n', content)
+                # Remove trailing spaces from lines
+                content = '\n'.join(line.rstrip() for line in content.split('\n'))
+                return content
             else:
                 raise Exception(f"OpenRouter API error: {response.status_code} - {response.text}")
                 
@@ -431,6 +439,11 @@ YOUR RESPONSE STYLE:
             
             # Use the LLM generate method with role-based temperature
             answer = self.llm.generate(prompt, temperature=temperature)
+            
+            # Clean up formatting
+            answer = answer.strip()
+            import re
+            answer = re.sub(r'\n{3,}', '\n\n', answer)
             
             return formatted_contexts, answer
             
@@ -994,6 +1007,12 @@ Critical rules:
         
         # Generate answer
         answer = self.llm.generate(full_prompt, temperature=temperature)
+        
+        # Clean up formatting issues
+        answer = answer.strip()
+        # Remove excessive newlines (more than 2 consecutive)
+        import re
+        answer = re.sub(r'\n{3,}', '\n\n', answer)
         
         print(f"📥 LLM response: {len(answer)} chars")
         print(f"📥 LLM response preview: {answer[:200]}...")

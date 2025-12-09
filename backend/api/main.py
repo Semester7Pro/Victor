@@ -139,6 +139,29 @@ class ListConversationsResponse(BaseModel):
 class TranscriptResponse(BaseModel):
     transcript: str
 
+# ===================== COMPARE ENDPOINT MODELS =====================
+class CompareRequest(BaseModel):
+    topic1: str
+    topic2: str
+    conversation_id: Optional[str] = None
+    temperature: float = 0.1
+    top_k: int = 5
+    dense_weight: float = 0.7
+    sparse_weight: float = 0.3
+    method: str = "hybrid"
+
+class CompareResponse(BaseModel):
+    topic1: str
+    topic2: str
+    topic1_answer: str
+    topic2_answer: str
+    comparison_analysis: str
+    topic1_sources: List[Any]
+    topic2_sources: List[Any]
+    conversation_id: str
+    model_used: str
+    total_latency_ms: float
+
 # Health check endpoint
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -1133,3 +1156,115 @@ async def delete_collection(collection_name: str, request: DeleteCollectionReque
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete collection: {str(e)}")
+
+# ===================== COMPARE ENDPOINT =====================
+@app.post("/compare", response_model=CompareResponse)
+async def compare_topics(request: CompareRequest, user: dict = Depends(verify_auth_token)):
+    """Compare two topics/documents using parallel RAG searches"""
+    import time
+    print(f"\n" + "="*80)
+    print(f"🔀 COMPARE REQUEST")
+    print(f"="*80)
+    print(f"   Topic 1: {request.topic1}")
+    print(f"   Topic 2: {request.topic2}")
+    print(f"   User: {user.get('email', 'unknown')}")
+    start_time = time.time()
+    langchain_rag = get_full_langchain_rag()
+
+    async def query_topic(topic: str, topic_num: int):
+        print(f"\n🔍 Querying Topic {topic_num}: {topic}")
+        result = langchain_rag.ask(
+            query=topic,
+            user_id=user["user_id"],
+            conversation_id=None,
+            temperature=request.temperature,
+            top_k=request.top_k,
+            user=user,
+            dense_weight=request.dense_weight,
+            sparse_weight=request.sparse_weight,
+            method=request.method
+        )
+        return result
+
+    results = await asyncio.gather(
+        query_topic(request.topic1, 1),
+        query_topic(request.topic2, 2)
+    )
+    result1, result2 = results
+
+    comparison_prompt = f"""You are analyzing and comparing two topics from educational policy documents.
+
+**Topic 1**: {request.topic1}
+**Answer 1**: {result1.get('answer', 'No information found')}
+
+**Topic 2**: {request.topic2}
+**Answer 2**: {result2.get('answer', 'No information found')}
+
+Provide a structured comparison analysis in the following format:
+
+## COMPARISON TABLE
+
+| Aspect | {request.topic1} | {request.topic2} |
+|--------|------------------|------------------|
+| Key Points | [List main points] | [List main points] |
+| Approach | [Describe approach] | [Describe approach] |
+| Coverage | [Scope/Coverage] | [Scope/Coverage] |
+| Implementation | [How implemented] | [How implemented] |
+
+## KEY SIMILARITIES
+- [Common theme 1]
+- [Common theme 2]
+- [Common principle 3]
+
+## KEY DIFFERENCES
+- **{request.topic1}**: [Distinction 1]
+  **{request.topic2}**: [Distinction 1]
+- **{request.topic1}**: [Distinction 2]
+  **{request.topic2}**: [Distinction 2]
+
+## PRACTICAL IMPLICATIONS
+[2-3 sentences on what these similarities and differences mean in practice]
+
+## SUMMARY
+[2-3 sentence concise summary of the overall comparison]
+
+IMPORTANT:
+- Use proper markdown formatting (headers, lists, tables, bold)
+- Cite sources when making specific claims: [Topic 1] or [Topic 2]
+- Keep analysis clear, concise, and based ONLY on provided information
+- Format the table properly with aligned columns"""
+    comparison_analysis = langchain_rag.llm.generate(comparison_prompt, temperature=0.1)
+    
+    # Clean up formatting issues
+    comparison_analysis = comparison_analysis.strip()
+
+    def format_sources(sources):
+        formatted = []
+        for source in sources:
+            try:
+                formatted.append(source)
+            except Exception as e:
+                print(f"⚠ Error formatting source: {e}")
+                continue
+        return formatted
+
+    topic1_sources = format_sources(result1.get("sources", []))
+    topic2_sources = format_sources(result2.get("sources", []))
+    total_latency = (time.time() - start_time) * 1000
+    print(f"\n✅ COMPARISON COMPLETE")
+    print(f"   Topic 1 sources: {len(topic1_sources)}")
+    print(f"   Topic 2 sources: {len(topic2_sources)}")
+    print(f"   Latency: {total_latency:.0f}ms")
+    print(f"="*80)
+    return CompareResponse(
+        topic1=request.topic1,
+        topic2=request.topic2,
+        topic1_answer=result1.get("answer", "No information found"),
+        topic2_answer=result2.get("answer", "No information found"),
+        comparison_analysis=comparison_analysis,
+        topic1_sources=topic1_sources,
+        topic2_sources=topic2_sources,
+        conversation_id=request.conversation_id or "comparison",
+        model_used=langchain_rag.model_name,
+        total_latency_ms=round(total_latency, 2)
+    )

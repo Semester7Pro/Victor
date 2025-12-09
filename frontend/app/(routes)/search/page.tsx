@@ -4,11 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useTheme } from "@/lib/ThemeContext";
+import { PolicyAssistDrafter } from "@/components/PolicyAssistDrafter";
+
 
 interface SearchResult {
   text: string;
-  source_file?: string;
-  page_idx?: number;
+  source_file: string;
+  page_idx: number;
   score: number;
   global_chunk_id?: string;
   document_id?: string;
@@ -16,10 +18,6 @@ interface SearchResult {
   section_hierarchy?: string;
   char_count?: number;
   word_count?: number;
-  // Additional fields
-  document_name?: string;
-  page?: number;
-  source?: string;
 }
 
 interface RAGResponse {
@@ -29,7 +27,7 @@ interface RAGResponse {
   model_used: string;
 }
 
-export default function Search() {
+export default function PolicyDrafterPage() {
   const { theme } = useTheme();
 
   const [query, setQuery] = useState("");
@@ -258,29 +256,18 @@ export default function Search() {
                           </span>
                           <span className="text-xs text-gray-600">•</span>
                           <span className="text-sm font-medium text-gray-200">
-                            {source.source_file || source.document_name || 'Unknown'}
+                            {source.source_file}
                           </span>
                         </div>
                         <div className="flex gap-4 flex-wrap">
                           <div className="flex items-center gap-1 text-xs text-gray-500">
                             <span></span>
-                            <span>Page {source.page_idx || source.page || 'N/A'}</span>
+                            <span>Page {source.page_idx}</span>
                           </div>
                           <div className="flex items-center gap-1 text-xs font-semibold text-gray-400">
                             <span></span>
                             <span>
-                              {(() => {
-                                const score = Number(source.score || 0);
-                                if (score >= 0 && score <= 1) {
-                                  return `${(score * 100).toFixed(1)}% match`;
-                                } else {
-                                  const scores = results.sources?.map(s => Number(s.score || 0)) || [];
-                                  const minScore = Math.min(...scores);
-                                  const maxScore = Math.max(...scores);
-                                  const normalized = ((score - minScore) / (maxScore - minScore)) * 100;
-                                  return `${normalized.toFixed(1)}% match`;
-                                }
-                              })()}
+                              Match: {(source.score * 100).toFixed(0)}%
                             </span>
                           </div>
                         </div>

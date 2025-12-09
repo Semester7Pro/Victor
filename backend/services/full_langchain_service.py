@@ -994,7 +994,9 @@ Critical rules:
                 # Create new conversation if needed
                 if user_id:
                     from services.mongodb_service import mongodb_service
-                    conversation_id = mongodb_service.create_conversation(user_id, title="New Chat")
+                    import uuid
+                    conversation_id = str(uuid.uuid4())
+                    mongodb_service.create_conversation(conversation_id, user_id, title="New Chat")
                     print(f"   Created new conversation: {conversation_id}")
                 else:
                     conversation_id = "temp_" + str(int(time.time()))

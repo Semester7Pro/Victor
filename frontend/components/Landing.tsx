@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useTheme } from "@/lib/ThemeContext";
 import Image from "next/image";
 import Beams from "./Beams";
-import { useUser, SignInButton, SignUpButton, SignOutButton } from "@clerk/nextjs";
+import { useUser, SignInButton, SignUpButton, SignOutButton, SignedIn, UserButton } from "@clerk/nextjs";
 
 // ========================= SVG Icon Components =========================
 const Icon = {
@@ -128,6 +128,10 @@ export default function Landing() {
               {user ? (
                 <>
                   {/* Greeting + Hamburger (Sign Out inside menu) */}
+                  
+                  <SignedIn>
+                      <UserButton afterSignOutUrl="/" />
+                  </SignedIn>
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-neutral-200 max-w-[140px] truncate">
                       Hi, {user.firstName || user.emailAddresses[0]?.emailAddress}

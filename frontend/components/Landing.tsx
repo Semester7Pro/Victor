@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/ThemeContext";
 import Image from "next/image";
 import Beams from "./Beams";
@@ -110,13 +111,13 @@ export default function Landing() {
             {/* Logo / Brand */}
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
-                <Image
-                  src="/logo.png"
+                {/* <Image
+                  // src="/logo.png"
                   alt="Victor Logo"
                   width={35}
                   height={35}
                   className="rounded-full"
-                />
+                /> */}
                 <span className="text-xl font-bold text-white tracking-tight">
                   Victor
                 </span>
@@ -233,43 +234,32 @@ export default function Landing() {
               knowledge base. Get instant answers backed by verified sources.
             </p>
 
-            {/* Hero CTAs: session-aware */}
+            {/* Hero CTAs - Always accessible */}
             <div className="relative flex gap-4 flex-wrap justify-center">
-              {user ? (
-                <>
-                  <Link
-                    href="/chat"
-                    className="inline-flex items-center justify-center px-10 py-4 font-mono font-medium tracking-tighter text-black bg-white hover:bg-neutral-200 rounded-lg transition-all transform hover:scale-105 shadow-lg"
-                  >
-                    Start Chatting
-                  </Link>
-                  <Link
-                    href="/search"
-                    className="inline-flex items-center justify-center px-10 py-4 font-mono font-medium tracking-tighter text-white bg-gradient-to-r from-neutral-700 to-neutral-400 hover:from-neutral-600 hover:to-neutral-300 rounded-lg transition-all transform hover:scale-105 shadow-lg"
-                  >
-                    Search Documents
-                  </Link>
-                  <Link
-                    href="/upload"
-                    className="inline-flex items-center justify-center px-10 py-4 font-mono font-medium tracking-tighter text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg transition-all border border-neutral-600 transform hover:scale-105"
-                  >
-                    Upload PDFs
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <SignInButton mode="modal">
-                    <button className="inline-flex items-center justify-center px-10 py-4 font-mono font-medium tracking-tighter text-black bg-white hover:bg-neutral-200 rounded-lg transition-all transform hover:scale-105 shadow-lg">
-                      Sign In Now
-                    </button>
-                  </SignInButton>
-                  <SignUpButton mode="modal">
-                    <button className="inline-flex items-center justify-center px-10 py-4 font-mono font-medium tracking-tighter text-white bg-black border border-white/40 hover:bg-white/5 rounded-lg transition-all transform hover:scale-105">
-                      Create Account
-                    </button>
-                  </SignUpButton>
-                </>
-              )}
+              <Link
+                href="/chat"
+                className="inline-flex items-center justify-center px-10 py-4 font-mono font-medium tracking-tighter text-black bg-white hover:bg-neutral-200 rounded-lg transition-all transform hover:scale-105 shadow-lg"
+              >
+                Start Chatting
+              </Link>
+              <Link
+                href="/search"
+                className="inline-flex items-center justify-center px-10 py-4 font-mono font-medium tracking-tighter text-white bg-gradient-to-r from-neutral-700 to-neutral-400 hover:from-neutral-600 hover:to-neutral-300 rounded-lg transition-all transform hover:scale-105 shadow-lg"
+              >
+                Search Documents
+              </Link>
+              <Link
+                href="/policy"
+                className="inline-flex items-center justify-center px-10 py-4 font-mono font-medium tracking-tighter text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all transform hover:scale-105 shadow-lg"
+              >
+                📝 Policy Drafter
+              </Link>
+              <Link
+                href="/upload"
+                className="inline-flex items-center justify-center px-10 py-4 font-mono font-medium tracking-tighter text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg transition-all border border-neutral-600 transform hover:scale-105"
+              >
+                Upload PDFs
+              </Link>
             </div>
           </section>
 

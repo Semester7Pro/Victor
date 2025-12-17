@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 import httpx
 import json
 import time
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 # LangChain imports
 try:
     from langchain_core.memory import BaseMemory
@@ -240,7 +242,15 @@ class OpenRouterLLM:
             
             if response.status_code == 200:
                 result = response.json()
-                return result["choices"][0]["message"]["content"]
+                content = result["choices"][0]["message"]["content"]
+                # Clean up formatting issues
+                content = content.strip()
+                # Remove excessive newlines
+                import re
+                content = re.sub(r'\n{3,}', '\n\n', content)
+                # Remove trailing spaces from lines
+                content = '\n'.join(line.rstrip() for line in content.split('\n'))
+                return content
             else:
                 raise Exception(f"OpenRouter API error: {response.status_code} - {response.text}")
                 
@@ -443,6 +453,12 @@ YOUR RESPONSE STYLE:
             
             # Use the LLM generate method with role-based temperature
             answer = await self.llm.generate(prompt, temperature=temperature)
+            
+            
+            # Clean up formatting
+            answer = answer.strip()
+            import re
+            answer = re.sub(r'\n{3,}', '\n\n', answer)
             
             return formatted_contexts, answer
             
@@ -730,8 +746,8 @@ Return only valid JSON, no extra text:"""
         print(f"   Filter: {filter_expr or 'None'}")
         
         try:
-            # ✅ Always fetch 50 documents for reranking (regardless of requested top_k)
-            retrieval_limit = 50
+            # ✅ Always fetch 30 documents for reranking (regardless of requested top_k)
+            retrieval_limit = 30
             
             results = await self.milvus_client.search(
                 query=query,
@@ -742,7 +758,15 @@ Return only valid JSON, no extra text:"""
             
             print(f"   📊 Retrieved: {len(results)} results")
             
-            # ✅ REMOVED: No keyword filtering - metadata handles document_id
+            if not documents:
+                print(f"   ⚠️ No documents retrieved - returning early")
+                return {
+                    "answer": "I cannot answer this based on the provided documents.",
+                    "sources": [],
+                    "conversation_id": conversation_id if conversation_id else "no_conv",
+                    "model_used": self.model_name,
+                    "method": method
+                }
             
             # Deduplicate
             unique_results = self._deduplicate_results(results)
@@ -752,19 +776,68 @@ Return only valid JSON, no extra text:"""
                 print(f"   ❌ No documents found")
                 return []
             
-            # Cross-encoder reranking (replaces context-based reranking)
+            # Cross-encoder reranking
             print(f"   🔄 Applying cross-encoder reranking...")
             from services.reranker_service import get_reranker
             reranker = get_reranker()
             reranked_docs = reranker.rerank(
                 query=query,
                 documents=unique_results,
-                top_k=15,  # Changed from 3 to 15
+                top_k=8,
                 min_k=3
             )
             
-            # Take top-k (already done by reranker, but ensure consistency)
-            final_results = reranked_docs[:top_k]
+            # ✅ NEW: Normalize scores and apply 50% threshold
+            if reranked_docs:
+                # Extract all scores for normalization
+                all_scores = [doc.get('score', 0) for doc in reranked_docs]
+                
+                # Normalize scores to 0-100 range
+                min_score = min(all_scores)
+                max_score = max(all_scores)
+                
+                print(f"\n   📊 SCORE NORMALIZATION:")
+                print(f"      Min score: {min_score:.4f}")
+                print(f"      Max score: {max_score:.4f}")
+                
+                # Normalize and add normalized_score field
+                for doc in reranked_docs:
+                    raw_score = doc.get('score', 0)
+                    
+                    # Normalize to 0-100
+                    if max_score == min_score:
+                        normalized = 100.0  # All scores are the same
+                    else:
+                        normalized = ((raw_score - min_score) / (max_score - min_score)) * 100
+                    
+                    doc['normalized_score'] = normalized
+                    doc['raw_score'] = raw_score  # Keep original score
+                
+                # ✅ FILTER: Only keep documents with normalized score >= 50%
+                SCORE_THRESHOLD = 50.0
+                filtered_docs = [
+                    doc for doc in reranked_docs 
+                    if doc.get('normalized_score', 0) >= SCORE_THRESHOLD
+                ]
+                
+                print(f"\n   🎯 SCORE FILTERING (threshold: {SCORE_THRESHOLD}%):")
+                print(f"      Before filtering: {len(reranked_docs)} documents")
+                print(f"      After filtering: {len(filtered_docs)} documents")
+                print(f"      Removed: {len(reranked_docs) - len(filtered_docs)} low-quality documents")
+                
+                if filtered_docs:
+                    print(f"      Score range: {filtered_docs[-1].get('normalized_score', 0):.1f}% - {filtered_docs[0].get('normalized_score', 0):.1f}%")
+                else:
+                    print(f"      ⚠️ WARNING: No documents passed the {SCORE_THRESHOLD}% threshold!")
+                    print(f"      ⚠️ Returning top 3 to avoid empty response")
+                    # Return at least top 3 to avoid completely empty results
+                    filtered_docs = reranked_docs[:3]
+                    for doc in filtered_docs:
+                        print(f"         - {doc.get('document_name', 'unknown')}: {doc.get('normalized_score', 0):.1f}%")
+                
+                final_results = filtered_docs
+            else:
+                final_results = []
             
             print(f"   ✅ Final: {len(final_results)} documents")
             if final_results:
@@ -848,48 +921,37 @@ Return only valid JSON, no extra text:"""
 
 Your core capabilities:
 - Answer questions using ONLY information from the provided documents
-- Apply TEMPORAL ANALYSIS - consider dates, timelines, and chronological context in documents
-- Use LOGICAL REASONING - think step-by-step, analyze cause-effect relationships
-- Maintain a natural, conversational, and helpful tone (like ChatGPT)
-- Be truthful - if documents don't contain the answer, clearly state: "I cannot answer this based on the provided documents"
+- Analyze temporal context (dates, timelines, chronological changes) when relevant
+- Apply logical reasoning and step-by-step thinking
+- Maintain a natural, conversational tone (like ChatGPT)
+- Be completely truthful - if documents don't contain the answer, clearly state: "I cannot answer this based on the provided documents"
 
-Your analytical framework:
-1. TEMPORAL CONTEXT
-   - Identify and note publication dates, effective dates, amendment dates in documents
-   - Recognize time-based patterns (before/after policy changes, evolution over time)
-   - Compare information across different time periods
-   - Highlight what changed when, and what remained constant
-   - Use phrases like "As of [date]...", "Prior to [year]...", "Following [event]..."
+Your analytical approach (apply flexibly based on the question):
+- When dates/timelines matter: Note publication dates, effective dates, before/after comparisons
+- When logic/reasoning matters: Explain step-by-step, show cause-effect relationships
+- When comparing: Analyze differences, similarities, and implications
+- When defining: Provide clear explanations with context
+- When analyzing impact: Consider multiple perspectives and consequences
 
-2. LOGICAL ANALYSIS
-   - Think through problems step-by-step
-   - Identify cause-and-effect relationships
-   - Connect related concepts across documents logically
-   - Analyze implications and consequences
-   - Recognize contradictions or complementary information
-   - Build coherent arguments from evidence
-
-3. INFORMATION SYNTHESIS
-   - Cross-reference information from multiple documents
-   - Identify patterns and relationships
-   - Distinguish between facts, policies, and recommendations
-   - Provide context for technical terms and acronyms
-   - Connect specific details to broader policy goals
-
-Your response requirements:
-- Use conversation history to understand context, pronouns ("it", "this", "that"), and follow-up questions
-- Provide specific citations: [Document: <name>, Page: <number>, Date: <if available>]
-- Reorganize information logically for clarity
-- Never invent or assume information not present in documents
-- When temporal information exists, ALWAYS include it in your analysis
+Your response principles:
+- Use conversation history to understand context, pronouns ("it", "this", "that"), and follow-ups
+- Cite sources clearly: [Document: <name>, Page: <number>]
+- Adapt your response style to the question type (comparison, definition, timeline, analysis, etc.)
+- Include temporal context when dates are present in documents
+- Think logically and show reasoning when needed, but keep it natural and conversational
+- Never invent information not present in documents
 
 Your response style:
+- Natural and conversational (like ChatGPT)
 - Clear, concise, and comprehensive
-- Natural conversational flow with temporal precision
-- Logical reasoning made explicit when needed
-- Decision support when relevant (pros/cons, implications, considerations)
-- Analytical depth - examine information from multiple perspectives
-- Cite sources with temporal context: [Document: <name>, Page: <number>, Published: <date>]"""
+- Analytical when needed, but not formulaic
+- Helpful and approachable with proper citations
+
+Remember:
+- Answer based ONLY on provided documents and conversation history
+- Cite every factual claim with source
+- Adapt your analysis style to what the question needs
+- Be natural, not templated"""
 
         if conversation_context:
             topics = conversation_context.get("topics", [])
@@ -943,51 +1005,35 @@ Your response style:
 === RETRIEVED DOCUMENTS ===
 {doc_context}
 
-=== YOUR ANALYTICAL APPROACH ===
+=== GUIDELINES FOR THIS SPECIFIC QUESTION ===
 
-STEP 1: TEMPORAL ANALYSIS
-- Scan all documents for dates, time periods, and temporal markers
-- Note: publication dates, effective dates, amendment dates
-- Identify: what changed over time? what's current vs. historical?
-- Consider: chronological order of policies, evolution of concepts
+Analyze what type of answer is needed:
+- Is this asking for a definition, comparison, timeline, impact analysis, or explanation?
+- What aspects are most relevant: temporal (dates/changes), logical (reasoning/causes), structural (how things work), or evaluative (pros/cons)?
+- Are there pronouns or references to previous conversation that need context?
 
-STEP 2: LOGICAL ANALYSIS
-- Break down the question into sub-components
-- Identify what type of answer is needed (definition, comparison, timeline, impact, etc.)
-- Map relevant information from documents to question components
-- Identify cause-effect relationships, dependencies, implications
-- Cross-reference information across sources for completeness
+Your approach:
+1. Understand the question and its context from conversation history
+2. Identify relevant information from documents
+3. Consider temporal aspects if dates/timelines are present
+4. Apply logical reasoning if needed for the question type
+5. Structure your answer naturally based on what the question asks
+6. Cite all sources clearly
 
-STEP 3: SYNTHESIS & VERIFICATION
-- Combine information logically and chronologically
-- Check for contradictions or gaps in evidence
-- Ensure temporal accuracy (don't mix historical and current policies)
-- Verify all claims are grounded in documents
-- Prepare citations with temporal context where available
-
-STEP 4: RESPONSE CONSTRUCTION
-- Start with direct answer to the question
-- Provide temporal context (when did this happen/change?)
-- Explain the logic/reasoning behind policies or changes
-- Include relevant dates and timeline information
-- Add decision support if applicable (implications, considerations)
-- Cite all sources with: [Document: <name>, Page: <number>, Date: <if known>]
-
-=== CRITICAL RULES ===
-✓ Use temporal context from documents (dates, periods, before/after)
-✓ Think step-by-step and show logical reasoning
-✓ Analyze from multiple perspectives before answering
-✓ Use conversation history to understand pronouns and context
-✓ Cite every factual claim with source
-✗ Never invent dates, information, or details
-✗ Don't mix information from different time periods without noting it
-✗ Don't assume causation without evidence
+Critical rules:
+✓ Use temporal context when documents contain dates
+✓ Show logical reasoning when the question requires analysis
+✓ Use conversation history for pronouns and context
+✓ Cite every claim: [Document: <name>, Page: <number>]
+✗ Don't force a specific format - adapt to the question
+✗ Don't invent information not in documents
+✗ Don't use templated section headers unless natural
 
 === CURRENT QUESTION ===
 {query}
 
 === YOUR ANSWER ===
-(Apply temporal analysis → logical reasoning → synthesis, then respond clearly with citations and temporal context):"""
+(Think about what this question needs, then respond naturally with citations):"""
 
         print(f"📤 Calling LLM with temporal & logical analysis prompt")
         print(f"   Prompt length: {len(full_prompt)} chars")
@@ -995,6 +1041,12 @@ STEP 4: RESPONSE CONSTRUCTION
         
         # Generate answer
         answer = await self.llm.generate(full_prompt, temperature=temperature)
+        
+        # Clean up formatting issues
+        answer = answer.strip()
+        # Remove excessive newlines (more than 2 consecutive)
+        import re
+        answer = re.sub(r'\n{3,}', '\n\n', answer)
         
         print(f"📥 LLM response: {len(answer)} chars")
         print(f"📥 LLM response preview: {answer[:200]}...")
@@ -1043,7 +1095,9 @@ STEP 4: RESPONSE CONSTRUCTION
                 # Create new conversation if needed
                 if user_id:
                     from services.mongodb_service import mongodb_service
-                    conversation_id = mongodb_service.create_conversation(user_id, title="New Chat")
+                    import uuid
+                    conversation_id = str(uuid.uuid4())
+                    mongodb_service.create_conversation(conversation_id, user_id, title="New Chat")
                     print(f"   Created new conversation: {conversation_id}")
                 else:
                     conversation_id = "temp_" + str(int(time.time()))
@@ -1097,6 +1151,100 @@ STEP 4: RESPONSE CONSTRUCTION
                 "model_used": self.model_name,
                 "method": method
             }
+    
+    async def _retrieve_documents_async(self, query: str, top_k: int, dense_weight: float, 
+                                       sparse_weight: float, method: str, 
+                                       conversation_context: dict = None,
+                                       filter_expr: str = None,
+                                       document_keyword: str = None):
+        """Async version of document retrieval"""
+        
+        print(f"\n🔍 ASYNC DOCUMENT RETRIEVAL")
+        print(f"   Query: {query}")
+        print(f"   Method: {method}")
+        print(f"   Top-K: {top_k}")
+        print(f"   Filter: {filter_expr or 'None'}")
+        
+        try:
+            # ✅ Always fetch 30 documents for reranking (regardless of requested top_k)
+            retrieval_limit = 30
+            
+            results = self.milvus_client.search(
+                query=query,
+                top_k=retrieval_limit,
+                method=method,
+                filter_expr=filter_expr
+            )
+            
+            print(f"   📊 Retrieved: {len(results)} results")
+            
+            # Deduplicate
+            unique_results = self._deduplicate_results(results)
+            print(f"   📊 After deduplication: {len(unique_results)}")
+            
+            if len(unique_results) == 0:
+                print(f"   ❌ No documents found")
+                return []
+            
+            # Cross-encoder reranking
+            print(f"   🔄 Applying cross-encoder reranking...")
+            from services.reranker_service import get_reranker
+            reranker = get_reranker()
+            
+            # ✅ Run reranking in thread pool (non-blocking)
+            loop = asyncio.get_event_loop()
+            reranked_docs = await loop.run_in_executor(
+                self.executor if hasattr(self, 'executor') else None,
+                lambda: reranker.rerank(query, unique_results, top_k=8, min_k=3)
+            )
+            
+            # ✅ NEW: Normalize scores and apply 50% threshold (same as sync version)
+            if reranked_docs:
+                all_scores = [doc.get('score', 0) for doc in reranked_docs]
+                min_score = min(all_scores)
+                max_score = max(all_scores)
+                
+                print(f"\n   📊 SCORE NORMALIZATION:")
+                print(f"      Min score: {min_score:.4f}")
+                print(f"      Max score: {max_score:.4f}")
+                
+                for doc in reranked_docs:
+                    raw_score = doc.get('score', 0)
+                    if max_score == min_score:
+                        normalized = 100.0
+                    else:
+                        normalized = ((raw_score - min_score) / (max_score - min_score)) * 100
+                    
+                    doc['normalized_score'] = normalized
+                    doc['raw_score'] = raw_score
+                
+                SCORE_THRESHOLD = 50.0
+                filtered_docs = [
+                    doc for doc in reranked_docs 
+                    if doc.get('normalized_score', 0) >= SCORE_THRESHOLD
+                ]
+                
+                print(f"\n   🎯 SCORE FILTERING (threshold: {SCORE_THRESHOLD}%):")
+                print(f"      Before filtering: {len(reranked_docs)} documents")
+                print(f"      After filtering: {len(filtered_docs)} documents")
+                
+                if not filtered_docs:
+                    print(f"      ⚠️ No documents passed threshold, returning top 3")
+                    filtered_docs = reranked_docs[:3]
+                
+                final_results = filtered_docs
+            else:
+                final_results = []
+            
+            print(f"   ✅ Final: {len(final_results)} documents")
+            
+            return final_results
+            
+        except Exception as e:
+            print(f"   ❌ Retrieval error: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
 
 # Global singleton instance
 _langchain_rag_instance = None

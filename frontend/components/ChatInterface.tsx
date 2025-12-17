@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import dynamic from 'next/dynamic';
+const CompareModal = dynamic(() => import('./CompareModal'), { ssr: false });
 import { useRouter } from 'next/navigation';
 import DockRoot from '@/components/Dock';
 import VoiceInput from '@/components/VoiceInput';
@@ -14,15 +16,18 @@ interface Message {
   created_at: string;
   sources?: Array<{
     text: string;
-    source_file: string;
-    page_idx: number;
-    score: number;
+    source_file?: string;
+    page_idx?: number;
+    score?: number;
     global_chunk_id?: string;
     document_id?: string;
     chunk_index?: number;
     section_hierarchy?: string;
     char_count?: number;
     word_count?: number;
+    document_name?: string;
+    page?: number;
+    source?: string;
   }>;
 }
 
@@ -40,15 +45,18 @@ interface ChatResponse {
   conversation_id: string;
   sources?: Array<{
     text: string;
-    source_file: string;
-    page_idx: number;
-    score: number;
+    source_file?: string;
+    page_idx?: number;
+    score?: number;
     global_chunk_id?: string;
     document_id?: string;
     chunk_index?: number;
     section_hierarchy?: string;
     char_count?: number;
     word_count?: number;
+    document_name?: string;
+    page?: number;
+    source?: string;
   }>;
 }
 
@@ -58,6 +66,7 @@ interface ChatInterfaceProps {
 }
 
 export default function ChatInterface({ authToken, userName = 'User' }: ChatInterfaceProps) {
+  const [compareOpen, setCompareOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<string | null>(null);
   const [currentTitle, setCurrentTitle] = useState<string>('New Chat');
@@ -336,8 +345,10 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
   };
 
   const renderMarkdown = (text: string) => {
-    // Handle undefined or null text
-    if (!text) return '';
+    // Safety check for undefined or null text
+    if (!text || typeof text !== 'string') {
+      return '';
+    }
     
     const boldRegex = /\*\*(.*?)\*\*/g;
     const withBold = text.replace(boldRegex, '<strong>$1</strong>');
@@ -821,7 +832,7 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
                     <div
                       className="text-sm leading-relaxed whitespace-pre-wrap [&_strong]:font-semibold [&_ol]:list-decimal [&_ol]:ml-6 [&_ul]:list-disc [&_ul]:ml-6 [&_li]:my-1.5"
                       dangerouslySetInnerHTML={{
-                        __html: renderMarkdown(message.content),
+                        __html: renderMarkdown(message.content || ''),
                       }}
                     />
                     {message.sources && message.sources.length > 0 && (
@@ -840,10 +851,10 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
                               d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
                             />
                           </svg>
-                          Sources
+                          Sources ({message.sources.length})
                         </p>
-                        <ul className="space-y-1.5">
-                          {message.sources.slice(0, 3).map((source, i) => (
+                        <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+                          {message.sources.map((source, i) => (
                             <li
                               key={i}
                               className={`flex items-start gap-2 ${
@@ -852,18 +863,35 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
                                   : 'text-neutral-400'
                               }`}
                             >
-                              <span className="text-neutral-300 mt-0.5">•</span>
-                              <span>
+                              <span className="text-neutral-300 mt-0.5">{i + 1}.</span>
+                              <span className="text-sm">
                                 <span className="font-medium text-neutral-200">
-                                  {source.source_file}
+                                  {source.source_file || source.document_name || 'Unknown'}
                                 </span>
                                 <span className="opacity-75">
                                   {' '}
-                                  (Page {source.page_idx})
+                                  (Page {source.page_idx || source.page || 'N/A'})
                                 </span>
-                                <span className="ml-1.5 opacity-60">
-                                  – {(source.score * 100).toFixed(1)}% match
-                                </span>
+                                {source.score !== undefined && source.score !== null && (
+                                  <span className="ml-1.5 opacity-60">
+                                    – {(() => {
+                                      const score = Number(source.score);
+                                      // Normalize score to 0-100%
+                                      // If score is between 0-1, multiply by 100
+                                      // If score is negative or > 1, normalize using min-max from all sources
+                                      if (score >= 0 && score <= 1) {
+                                        return (score * 100).toFixed(1);
+                                      } else {
+                                        // For cross-encoder scores (can be negative), normalize relative to range
+                                        const scores = (message.sources || []).map(s => Number(s.score || 0));
+                                        const minScore = Math.min(...scores);
+                                        const maxScore = Math.max(...scores);
+                                        const normalized = ((score - minScore) / (maxScore - minScore)) * 100;
+                                        return normalized.toFixed(1);
+                                      }
+                                    })()}% match
+                                  </span>
+                                )}
                               </span>
                             </li>
                           ))}
@@ -959,6 +987,23 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
                     </>
                   )}
                 </button>
+
+                {/* Compare Button */}
+                <button
+                  type="button"
+                  onClick={() => setCompareOpen(true)}
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-medium transition-all shadow-lg flex items-center gap-2"
+                  title="Compare topics or documents"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 3a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2h10zm-7 7h4m-4 4h4" />
+                  </svg>
+                  <span className="hidden sm:inline">Compare</span>
+                </button>
+                    {/* Compare Modal */}
+                    {compareOpen && (
+                      <CompareModal authToken={authToken} onClose={() => setCompareOpen(false)} />
+                    )}
               </form>
 
               {/* Language hint */}

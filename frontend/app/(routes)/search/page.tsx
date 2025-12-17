@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useTheme } from "@/lib/ThemeContext";
+import { PolicyAssistDrafter } from "@/components/PolicyAssistDrafter";
+
 
 interface SearchResult {
   text: string;
@@ -25,7 +27,7 @@ interface RAGResponse {
   model_used: string;
 }
 
-export default function Search() {
+export default function PolicyDrafterPage() {
   const { theme } = useTheme();
 
   const [query, setQuery] = useState("");

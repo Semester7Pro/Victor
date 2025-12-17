@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     
     # Network check settings
     NETWORK_CHECK_TIMEOUT: int = 5  # seconds
-    NETWORK_CHECK_URL: str = "https://api.openrouter.ai/api/v1/models"
+    NETWORK_CHECK_URL: str = "https://openrouter.ai/api/v1/models"
     OLLAMA_CHECK_URL: str = "http://localhost:11434/api/tags"
     
     # Retry settings

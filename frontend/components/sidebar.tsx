@@ -2,12 +2,15 @@
 import { cn } from "@/lib/utils";
 import React, { useState, createContext, useContext } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { IconMenu2, IconX } from "@tabler/icons-react";
+import { IconMenu2, IconX, IconDatabase } from "@tabler/icons-react";
+import MilvusManager from "./MilvusManager";
+import { useAuth } from "@/lib/auth-context";
 
 interface Links {
   label: string;
   href: string;
   icon: React.JSX.Element | React.ReactNode;
+  onClick?: () => void; // ✅ Added onClick support
 }
 
 interface SidebarContextProps {
@@ -84,11 +87,14 @@ export const DesktopSidebar = ({
   ...props
 }: React.ComponentProps<typeof motion.div>) => {
   const { open, setOpen, animate } = useSidebar();
+  const { token, isAdmin } = useAuth(); // ✅ Get auth context
+  const [showMilvusManager, setShowMilvusManager] = useState(false); // ✅ State for modal
+
   return (
     <>
       <motion.div
         className={cn(
-          "h-full px-4 py-4 hidden  md:flex md:flex-col bg-neutral-100 dark:bg-neutral-800 w-[300px] shrink-0",
+          "h-full px-4 py-4 hidden md:flex md:flex-col bg-neutral-100 dark:bg-neutral-800 w-[300px] shrink-0 relative",
           className
         )}
         animate={{
@@ -98,8 +104,40 @@ export const DesktopSidebar = ({
         onMouseLeave={() => setOpen(false)}
         {...props}
       >
-        {children}
+        {children as React.ReactNode}
+
+        {/* ✅ Admin-only Database Manager Button - Fixed at bottom */}
+        {isAdmin && (
+          <div className="mt-auto pt-4 border-t border-neutral-300 dark:border-neutral-700">
+            <button
+              onClick={() => setShowMilvusManager(true)}
+              className={cn(
+                "flex items-center justify-start gap-2 group/sidebar py-2 w-full hover:bg-purple-500/10 dark:hover:bg-purple-500/20 rounded-lg px-2 transition-colors"
+              )}
+              title="Milvus Database Manager (Admin)"
+            >
+              <IconDatabase className="text-purple-600 dark:text-purple-400 shrink-0 w-5 h-5" />
+              <motion.span
+                animate={{
+                  display: animate ? (open ? "inline-block" : "none") : "inline-block",
+                  opacity: animate ? (open ? 1 : 0) : 1,
+                }}
+                className="text-purple-700 dark:text-purple-300 text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0 font-medium"
+              >
+                Database Manager
+              </motion.span>
+            </button>
+          </div>
+        )}
       </motion.div>
+
+      {/* ✅ Milvus Manager Modal */}
+      {showMilvusManager && token && (
+        <MilvusManager
+          authToken={token}
+          onClose={() => setShowMilvusManager(false)}
+        />
+      )}
     </>
   );
 };
@@ -110,11 +148,14 @@ export const MobileSidebar = ({
   ...props
 }: React.ComponentProps<"div">) => {
   const { open, setOpen } = useSidebar();
+  const { token, isAdmin } = useAuth(); // ✅ Get auth context
+  const [showMilvusManager, setShowMilvusManager] = useState(false); // ✅ State for modal
+
   return (
     <>
       <div
         className={cn(
-          "h-10 px-4 py-4 flex flex-row md:hidden  items-center justify-between bg-neutral-100 dark:bg-neutral-800 w-full"
+          "h-10 px-4 py-4 flex flex-row md:hidden items-center justify-between bg-neutral-100 dark:bg-neutral-800 w-full"
         )}
         {...props}
       >
@@ -145,11 +186,37 @@ export const MobileSidebar = ({
               >
                 <IconX />
               </div>
-              {children}
+              <div className="flex-1">{children}</div>
+
+              {/* ✅ Admin-only Database Manager Button - Mobile */}
+              {isAdmin && (
+                <div className="pt-4 border-t border-neutral-300 dark:border-neutral-700">
+                  <button
+                    onClick={() => {
+                      setShowMilvusManager(true);
+                      setOpen(false);
+                    }}
+                    className="flex items-center gap-3 w-full py-3 px-4 hover:bg-purple-500/10 dark:hover:bg-purple-500/20 rounded-lg transition-colors"
+                  >
+                    <IconDatabase className="text-purple-600 dark:text-purple-400 w-6 h-6" />
+                    <span className="text-purple-700 dark:text-purple-300 text-base font-medium">
+                      Database Manager
+                    </span>
+                  </button>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+
+      {/* ✅ Milvus Manager Modal - Mobile */}
+      {showMilvusManager && token && (
+        <MilvusManager
+          authToken={token}
+          onClose={() => setShowMilvusManager(false)}
+        />
+      )}
     </>
   );
 };
@@ -163,11 +230,21 @@ export const SidebarLink = ({
   className?: string;
 }) => {
   const { open, animate } = useSidebar();
+
+  // ✅ Handle both href and onClick
+  const handleClick = (e: React.MouseEvent) => {
+    if (link.onClick) {
+      e.preventDefault();
+      link.onClick();
+    }
+  };
+
   return (
     <a
       href={link.href}
+      onClick={handleClick}
       className={cn(
-        "flex items-center justify-start gap-2  group/sidebar py-2",
+        "flex items-center justify-start gap-2 group/sidebar py-2",
         className
       )}
       {...props}

@@ -6,7 +6,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from fastapi import FastAPI, HTTPException, status, Request, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, status, Request, Depends, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
@@ -15,9 +15,16 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 from api.dependencies import verify_auth_token
 from services.conversation_service import get_conversation_service
+from backend.api.routers import auth
 from api.milvus_client import get_milvus_client
 from services.full_langchain_service import get_full_langchain_rag
 from pydantic import BaseModel, Field
+from typing import List, Dict, Optional, Any
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from pymilvus import connections, utility, Collection, DataType
+import jwt
+from bson import ObjectId
 from typing import List, Dict, Optional, Any
 import logging
 
@@ -69,6 +76,8 @@ class RootResponse(BaseModel):
     features: Dict[str, bool]
 
 # Lifespan context manager for startup/shutdown
+executor = ThreadPoolExecutor(max_workers=2)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -238,6 +247,28 @@ class RAGRequest(BaseModel):
     ministry: Optional[str] = None  # ✅ ADD THIS LINE
     date_from: Optional[str] = None
     date_to: Optional[str] = None
+
+class CompareRequest(BaseModel):
+    topic1: str
+    topic2: str
+    conversation_id: Optional[str] = None
+    temperature: float = 0.1
+    top_k: int = 5
+    dense_weight: float = 0.7
+    sparse_weight: float = 0.3
+    method: str = "hybrid"
+
+class CompareResponse(BaseModel):
+    topic1: str
+    topic2: str
+    topic1_answer: str
+    topic2_answer: str
+    comparison_analysis: str
+    topic1_sources: List[Any]
+    topic2_sources: List[Any]
+    conversation_id: str
+    model_used: str
+    total_latency_ms: float
 
 # Health check endpoint
 @app.get("/health", response_model=HealthResponse)
@@ -422,6 +453,9 @@ async def ask(request: RAGRequest, user: dict = Depends(verify_auth_token)):
         formatted_sources = []
         for source in result.get("sources", []):
             try:
+                # Use document_id directly as the source name
+                source_name = source.get('document_id', '')
+                
                 formatted_sources.append(SearchResult(
                     text=source.get("text", ""),
                     source=source.get("source", ""),
@@ -434,7 +468,11 @@ async def ask(request: RAGRequest, user: dict = Depends(verify_auth_token)):
                     section_hierarchy=source.get("section_hierarchy"),
                     heading_context=source.get("heading_context"),
                     char_count=source.get("char_count"),
-                    word_count=source.get("word_count")
+                    word_count=source.get("word_count"),
+                    # Use document_id directly as the name
+                    source_file=source_name,
+                    page_idx=source.get('page_idx') or source.get('page', 0),
+                    document_name=source_name
                 ))
             except Exception as e:
                 logger.warning(f"Error formatting source: {e}")
@@ -941,6 +979,402 @@ async def root():
                 "google_drive": False
             }
         )
+
+ # PDF serving endpoint
+@app.get("/pdf/{filename}")
+async def serve_pdf(filename: str):
+    """Serve PDF files from the data directory"""
+    try:
+        # Get the project root directory (parent of api folder)
+        api_dir = Path(__file__).parent
+        project_root = api_dir.parent
+        pdf_path = project_root / "data" / filename
+        
+        # Security check: ensure the file is in the data directory
+        if not pdf_path.is_file() or not pdf_path.resolve().is_relative_to(project_root / "data"):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="PDF file not found"
+            )
+        
+        return FileResponse(
+            path=str(pdf_path),
+            media_type="application/pdf",
+            filename=filename
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to serve PDF: {str(e)}"
+        )
+
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+
+@app.get("/filters/available")
+async def get_available_filters():
+    """Get all available filter values from the collection"""
+    try:
+        milvus_client = get_milvus_client()
+        filters = milvus_client.get_available_filters()
+        
+        print(f"\n📊 Available Filters:")
+        for key, values in filters.items():
+            if isinstance(values, dict):
+                print(f"   {key}: {values}")
+            else:
+                print(f"   {key}: {len(values)} options")
+        
+        return filters
+        
+    except Exception as e:
+        print(f"❌ Error getting filters: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get filters: {str(e)}"
+        )
+   
+# ===================== COMPARE ENDPOINT =====================
+@app.post("/compare", response_model=CompareResponse)
+async def compare_topics(request: CompareRequest, user: dict = Depends(verify_auth_token)):
+    """Compare two topics/documents using parallel RAG searches"""
+    import time
+    print(f"\n" + "="*80)
+    print(f"🔀 COMPARE REQUEST")
+    print(f"="*80)
+    print(f"   Topic 1: {request.topic1}")
+    print(f"   Topic 2: {request.topic2}")
+    print(f"   User: {user.get('email', 'unknown')}")
+    start_time = time.time()
+    langchain_rag = get_full_langchain_rag()
+
+    async def query_topic(topic: str, topic_num: int):
+        print(f"\n🔍 Querying Topic {topic_num}: {topic}")
+        result = await langchain_rag.ask(
+            query=topic,
+            user_id=user["user_id"],
+            conversation_id=None,
+            temperature=request.temperature,
+            top_k=request.top_k,
+            user=user,
+            dense_weight=request.dense_weight,
+            sparse_weight=request.sparse_weight,
+            method=request.method
+        )
+        return result
+
+    results = await asyncio.gather(
+        query_topic(request.topic1, 1),
+        query_topic(request.topic2, 2)
+    )
+    result1, result2 = results
+
+    comparison_prompt = f"""You are analyzing and comparing two topics from educational policy documents.
+
+**Topic 1**: {request.topic1}
+**Answer 1**: {result1.get('answer', 'No information found')}
+
+**Topic 2**: {request.topic2}
+**Answer 2**: {result2.get('answer', 'No information found')}
+
+Provide a structured comparison analysis in the following format:
+
+## COMPARISON TABLE
+
+| Aspect | {request.topic1} | {request.topic2} |
+|--------|------------------|------------------|
+| Key Points | [List main points] | [List main points] |
+| Approach | [Describe approach] | [Describe approach] |
+| Coverage | [Scope/Coverage] | [Scope/Coverage] |
+| Implementation | [How implemented] | [How implemented] |
+
+## KEY SIMILARITIES
+- [Common theme 1]
+- [Common theme 2]
+- [Common principle 3]
+
+## KEY DIFFERENCES
+- **{request.topic1}**: [Distinction 1]
+  **{request.topic2}**: [Distinction 1]
+- **{request.topic1}**: [Distinction 2]
+  **{request.topic2}**: [Distinction 2]
+
+## PRACTICAL IMPLICATIONS
+[2-3 sentences on what these similarities and differences mean in practice]
+
+## SUMMARY
+[2-3 sentence concise summary of the overall comparison]
+
+IMPORTANT:
+- Use proper markdown formatting (headers, lists, tables, bold)
+- Cite sources when making specific claims: [Topic 1] or [Topic 2]
+- Keep analysis clear, concise, and based ONLY on provided information
+- Format the table properly with aligned columns"""
+    comparison_analysis = await langchain_rag.llm.generate(comparison_prompt, temperature=0.1)
+    
+    # Clean up formatting issues
+    comparison_analysis = comparison_analysis.strip()
+
+    def format_sources(sources):
+        formatted = []
+        for source in sources:
+            try:
+                formatted.append(source)
+            except Exception as e:
+                print(f"⚠ Error formatting source: {e}")
+                continue
+        return formatted
+
+    topic1_sources = format_sources(result1.get("sources", []))
+    topic2_sources = format_sources(result2.get("sources", []))
+    total_latency = (time.time() - start_time) * 1000
+    print(f"\n✅ COMPARISON COMPLETE")
+    print(f"   Topic 1 sources: {len(topic1_sources)}")
+    print(f"   Topic 2 sources: {len(topic2_sources)}")
+    print(f"   Latency: {total_latency:.0f}ms")
+    print(f"="*80)
+    return CompareResponse(
+        topic1=request.topic1,
+        topic2=request.topic2,
+        topic1_answer=result1.get("answer", "No information found"),
+        topic2_answer=result2.get("answer", "No information found"),
+        comparison_analysis=comparison_analysis,
+        topic1_sources=topic1_sources,
+        topic2_sources=topic2_sources,
+        conversation_id=request.conversation_id or "comparison",
+        model_used=langchain_rag.model_name,
+        total_latency_ms=round(total_latency, 2)
+    )
+
+# ========== MILVUS MANAGEMENT ENDPOINTS (ADMIN ONLY) ==========
+
+class CollectionInfo(BaseModel):
+    name: str
+    num_entities: int
+    description: str
+
+class SchemaField(BaseModel):
+    name: str
+    type: str
+    is_primary: bool
+    auto_id: bool
+    params: Dict[str, Any]
+
+class CollectionSchema(BaseModel):
+    collection_name: str
+    description: str
+    fields: List[SchemaField]
+    indexes: List[Dict[str, Any]]
+
+class DeleteCollectionRequest(BaseModel):
+    collection_name: str
+    confirm: bool
+
+# Helper to check admin role
+async def verify_admin(authorization: str = Header(...)):
+    """Verify user is admin"""
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        # Get user from MongoDB
+        user = db.users.find_one({"_id": ObjectId(user_id)})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Check if admin
+        if user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        return user
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.get("/admin/milvus/collections", response_model=List[CollectionInfo])
+async def list_milvus_collections(user: dict = Depends(verify_admin)):
+    """List all Milvus collections (Admin only)"""
+    try:
+        connections.connect("admin", host=MILVUS_HOST, port=MILVUS_PORT, timeout=10)
+        collections = utility.list_collections()
+        
+        result = []
+        for name in collections:
+            try:
+                collection = Collection(name)
+                result.append({
+                    "name": name,
+                    "num_entities": collection.num_entities,
+                    "description": collection.description or "No description"
+                })
+            except Exception as e:
+                print(f"Error loading collection {name}: {e}")
+        
+        connections.disconnect("admin")
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list collections: {str(e)}")
+
+@app.get("/admin/milvus/collections/{collection_name}/schema", response_model=CollectionSchema)
+async def get_collection_schema(collection_name: str, user: dict = Depends(verify_admin)):
+    """Get collection schema (Admin only)"""
+    try:
+        connections.connect("admin", host=MILVUS_HOST, port=MILVUS_PORT, timeout=10)
+        
+        if not utility.has_collection(collection_name):
+            raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+        
+        collection = Collection(collection_name)
+        schema = collection.schema
+        
+        # Map DataType enums to readable names
+        dtype_map = {
+            DataType.BOOL: "BOOL",
+            DataType.INT8: "INT8",
+            DataType.INT16: "INT16",
+            DataType.INT32: "INT32",
+            DataType.INT64: "INT64",
+            DataType.FLOAT: "FLOAT",
+            DataType.DOUBLE: "DOUBLE",
+            DataType.STRING: "STRING",
+            DataType.VARCHAR: "VARCHAR",
+            DataType.BINARY_VECTOR: "BINARY_VECTOR",
+            DataType.FLOAT_VECTOR: "FLOAT_VECTOR",
+        }
+        
+        fields = []
+        for field in schema.fields:
+            fields.append({
+                "name": field.name,
+                "type": dtype_map.get(field.dtype, str(field.dtype)),
+                "is_primary": field.is_primary,
+                "auto_id": field.auto_id,
+                "params": field.params or {}
+            })
+        
+        # Get indexes
+        indexes = []
+        try:
+            for idx in collection.indexes:
+                indexes.append({
+                    "field_name": idx.field_name,
+                    "index_type": idx.params.get('index_type', 'N/A'),
+                    "metric_type": idx.params.get('metric_type', 'N/A'),
+                    "params": idx.params.get('params', {})
+                })
+        except Exception as e:
+            print(f"Error reading indexes: {e}")
+        
+        connections.disconnect("admin")
+        
+        return {
+            "collection_name": collection_name,
+            "description": schema.description or "No description",
+            "fields": fields,
+            "indexes": indexes
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get schema: {str(e)}")
+
+@app.get("/admin/milvus/collections/{collection_name}/stats")
+async def get_collection_stats(collection_name: str, user: dict = Depends(verify_admin)):
+    """Get collection statistics (Admin only)"""
+    try:
+        connections.connect("admin", host=MILVUS_HOST, port=MILVUS_PORT, timeout=10)
+        
+        if not utility.has_collection(collection_name):
+            raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+        
+        collection = Collection(collection_name)
+        
+        # Try to load collection
+        is_loaded = False
+        try:
+            collection.load()
+            is_loaded = True
+        except:
+            pass
+        
+        stats = {
+            "collection_name": collection_name,
+            "num_entities": collection.num_entities,
+            "is_loaded": is_loaded,
+            "description": collection.description or "No description"
+        }
+        
+        connections.disconnect("admin")
+        return stats
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+
+@app.get("/admin/milvus/collections/{collection_name}/sample")
+async def get_collection_sample(collection_name: str, limit: int = 5, user: dict = Depends(verify_admin)):
+    """Get sample data from collection (Admin only)"""
+    try:
+        connections.connect("admin", host=MILVUS_HOST, port=MILVUS_PORT, timeout=10)
+        
+        if not utility.has_collection(collection_name):
+            raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+        
+        collection = Collection(collection_name)
+        collection.load()
+        
+        # Get schema to determine fields
+        schema = collection.schema
+        output_fields = [
+            field.name for field in schema.fields 
+            if field.name != "id" and field.dtype != DataType.FLOAT_VECTOR
+        ]
+        
+        # Query data
+        results = collection.query(
+            expr="",
+            limit=min(limit, 10),  # Max 10 samples
+            output_fields=output_fields
+        )
+        
+        # Truncate long strings
+        for result in results:
+            for key, value in result.items():
+                if isinstance(value, str) and len(value) > 200:
+                    result[key] = value[:200] + "..."
+        
+        connections.disconnect("admin")
+        return {"samples": results, "count": len(results)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get sample data: {str(e)}")
+
+@app.delete("/admin/milvus/collections/{collection_name}")
+async def delete_collection(collection_name: str, request: DeleteCollectionRequest, user: dict = Depends(verify_admin)):
+    """Delete a collection (Admin only)"""
+    if not request.confirm:
+        raise HTTPException(status_code=400, detail="Confirmation required")
+    
+    try:
+        connections.connect("admin", host=MILVUS_HOST, port=MILVUS_PORT, timeout=10)
+        
+        if not utility.has_collection(collection_name):
+            raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+        
+        utility.drop_collection(collection_name)
+        connections.disconnect("admin")
+        
+        return {"message": f"Collection '{collection_name}' deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete collection: {str(e)}")
+
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():

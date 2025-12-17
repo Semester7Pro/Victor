@@ -758,15 +758,10 @@ Return only valid JSON, no extra text:"""
             
             print(f"   📊 Retrieved: {len(results)} results")
             
-            if not documents:
-                print(f"   ⚠️ No documents retrieved - returning early")
-                return {
-                    "answer": "I cannot answer this based on the provided documents.",
-                    "sources": [],
-                    "conversation_id": conversation_id if conversation_id else "no_conv",
-                    "model_used": self.model_name,
-                    "method": method
-                }
+            if not results:
+                print("   ❌ No documents found")
+                return []
+
             
             # Deduplicate
             unique_results = self._deduplicate_results(results)

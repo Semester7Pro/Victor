@@ -20,6 +20,7 @@ class MilvusClient:
         
         # Use Ollama for embeddings (offline-capable)
         print(f"🔄 Using Ollama for embeddings: {os.getenv('OLLAMA_EMBED_MODEL', 'bge-m3')}")
+        print(f"🔄 Ollama embedding model available: {os.getenv('OLLAMA_EMBED_MODEL', 'bge-m3')} (offline-capable)")
         self.ollama_service = OllamaService()
         
         # Lazy load sparse model only when needed
@@ -47,9 +48,80 @@ class MilvusClient:
         return collection
     
     async def embed_query_dense(self, query: str) -> List[float]:
-        """Generate dense embedding using Ollama"""
-        embeddings = await self.ollama_service.generate_embeddings([query])
-        return embeddings[0]
+        import traceback
+        prefer_online = os.getenv("PREFER_ONLINE", "false").lower() == "true"
+        online_model = os.getenv("ONLINE_EMBED_MODEL") or os.getenv("EMBEDDING_MODEL")
+        openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+        huggingface_key = os.getenv("HUGGINGFACE_API_KEY", "").strip()
+        print(f"[INFO] Embedding request for query: '{query[:60]}...'")
+        print(f"[INFO] Embedding preference: {'ONLINE' if prefer_online else 'OLLAMA (offline)'}")
+        # Try online first if preferred
+        if prefer_online:
+            try:
+                print("[INFO] Trying ONLINE embedding provider(s)...")
+                if openrouter_key:
+                    print("[INFO] Using OpenRouter for embedding.")
+                    import httpx
+                    url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1") + "/embeddings"
+                    headers = {
+                        "Authorization": f"Bearer {openrouter_key}",
+                        "Content-Type": "application/json"
+                    }
+                    payload = {"model": online_model, "input": [query]}
+                    print(f"[DEBUG] OpenRouter embeddings URL: {url}")
+                    print(f"[DEBUG] Payload: {payload}")
+                    try:
+                        resp = httpx.post(url, headers=headers, json=payload, timeout=30)
+                        print(f"[DEBUG] OpenRouter response status: {resp.status_code}")
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            print(f"[DEBUG] OpenRouter response keys: {list(data.keys())}")
+                            emb = data["data"][0]["embedding"]
+                            print(f"[DEBUG] Got embedding of length {len(emb)} from OpenRouter")
+                            print("[SUCCESS] Used OpenRouter for embedding.")
+                            return emb
+                        else:
+                            print(f"[ERROR] OpenRouter embedding failed: {resp.text}")
+                    except Exception as e:
+                        print(f"[ERROR] Exception during OpenRouter embedding: {e}")
+                        traceback.print_exc()
+                if huggingface_key:
+                    print("[INFO] Using HuggingFace for embedding.")
+                    import requests
+                    url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{online_model}"
+                    headers = {"Authorization": f"Bearer {huggingface_key}"}
+                    payload = {"inputs": [query]}
+                    print(f"[DEBUG] HuggingFace embeddings URL: {url}")
+                    print(f"[DEBUG] Payload: {payload}")
+                    try:
+                        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+                        print(f"[DEBUG] HuggingFace response status: {resp.status_code}")
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            # HuggingFace returns a nested list
+                            emb = data[0][0] if isinstance(data, list) and isinstance(data[0], list) else data[0]
+                            print(f"[DEBUG] Got embedding of length {len(emb)} from HuggingFace")
+                            print("[SUCCESS] Used HuggingFace for embedding.")
+                            return emb
+                        else:
+                            print(f"[ERROR] HuggingFace embedding failed: {resp.text}")
+                    except Exception as e:
+                        print(f"[ERROR] Exception during HuggingFace embedding: {e}")
+                        traceback.print_exc()
+                print("[WARN] No online embedding provider succeeded, falling back to Ollama.")
+            except Exception as e:
+                print(f"[ERROR] Exception in online embedding block: {e}")
+                traceback.print_exc()
+        # Default: Ollama
+        try:
+            print("[INFO] Using Ollama for embedding (offline mode).")
+            embeddings = await self.ollama_service.generate_embeddings([query])
+            print(f"[SUCCESS] Used Ollama for embedding.")
+            return embeddings[0]
+        except Exception as e:
+            print(f"[ERROR] Ollama embedding failed: {e}")
+            traceback.print_exc()
+            raise RuntimeError(f"Embedding generation failed: {e}")
     
     def embed_query_sparse(self, query: str) -> Dict[int, float]:
         """

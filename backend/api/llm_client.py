@@ -37,7 +37,7 @@ class OpenRouterClient:
         if not self.api_key:
             raise ValueError("OPENROUTER_API_KEY not found in environment")
         
-        self.base_url = "https://openrouter.ai/api/v1/chat/completions"
+        self.base_url = "https://openrouter.ai/api/v1"
         self.model = os.getenv("LLM_MODEL")
         self.site_url = os.getenv("SITE_URL", "http://localhost:3000")
         self.site_name = os.getenv("SITE_NAME", "VICTOR")

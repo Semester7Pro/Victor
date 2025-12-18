@@ -1002,7 +1002,7 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
                 </button>
                     {/* Compare Modal */}
                     {compareOpen && (
-                      <CompareModal authToken={authToken} onClose={() => setCompareOpen(false)} />
+                      <CompareModal open={compareOpen} authToken={authToken} onClose={() => setCompareOpen(false)} />
                     )}
               </form>
 

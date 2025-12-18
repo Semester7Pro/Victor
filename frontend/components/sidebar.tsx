@@ -3,6 +3,9 @@ import { cn } from "@/lib/utils";
 import React, { useState, createContext, useContext } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { IconMenu2, IconX, IconDatabase } from "@tabler/icons-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import MilvusManager from "./MilvusManager";
 import { useAuth } from "@/lib/auth-context";
 
@@ -10,7 +13,7 @@ interface Links {
   label: string;
   href: string;
   icon: React.JSX.Element | React.ReactNode;
-  onClick?: () => void; // ✅ Added onClick support
+  onClick?: () => void;
 }
 
 interface SidebarContextProps {
@@ -87,51 +90,93 @@ export const DesktopSidebar = ({
   ...props
 }: React.ComponentProps<typeof motion.div>) => {
   const { open, setOpen, animate } = useSidebar();
-  const { token, isAdmin } = useAuth(); // ✅ Get auth context
-  const [showMilvusManager, setShowMilvusManager] = useState(false); // ✅ State for modal
+  const { token, isAdmin } = useAuth();
+  const [showMilvusManager, setShowMilvusManager] = useState(false);
 
   return (
     <>
       <motion.div
         className={cn(
-          "h-full px-4 py-4 hidden md:flex md:flex-col bg-neutral-100 dark:bg-neutral-800 w-[300px] shrink-0 relative",
+          "h-full hidden md:flex md:flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300",
           className
         )}
         animate={{
-          width: animate ? (open ? "300px" : "60px") : "300px",
+          width: animate ? (open ? "256px" : "64px") : "256px",
         }}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
         {...props}
       >
-        {children as React.ReactNode}
+        {/* Tricolor top bar */}
+        <div className="h-1 tricolor-bar" />
 
-        {/* ✅ Admin-only Database Manager Button - Fixed at bottom */}
+        {/* Header */}
+        <div className="flex items-center justify-between p-3 border-b border-sidebar-border">
+          <motion.div
+            animate={{
+              opacity: animate ? (open ? 1 : 0) : 1,
+              display: animate ? (open ? "flex" : "none") : "flex",
+            }}
+            className="flex items-center gap-2"
+          >
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
+              <span className="text-primary-foreground font-bold text-sm">भ</span>
+            </div>
+            <span className="font-semibold text-sidebar-foreground whitespace-nowrap">RAG Portal</span>
+          </motion.div>
+          
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setOpen(!open)}
+            className="h-8 w-8 hover:bg-primary/10 shrink-0"
+          >
+            {open ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </Button>
+        </div>
+
+        {/* Main navigation */}
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+          {children as React.ReactNode}
+        </nav>
+
+        {/* Admin-only Database Manager Button - Fixed at bottom */}
         {isAdmin && (
-          <div className="mt-auto pt-4 border-t border-neutral-300 dark:border-neutral-700">
-            <button
-              onClick={() => setShowMilvusManager(true)}
-              className={cn(
-                "flex items-center justify-start gap-2 group/sidebar py-2 w-full hover:bg-purple-500/10 dark:hover:bg-purple-500/20 rounded-lg px-2 transition-colors"
+          <div className="p-2 border-t border-sidebar-border">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowMilvusManager(true)}
+                  className={cn(
+                    "w-full gap-3 h-11 px-3 transition-all duration-200",
+                    "hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400",
+                    open ? "justify-start" : "justify-center px-2"
+                  )}
+                >
+                  <IconDatabase className="h-5 w-5 shrink-0 text-purple-600 dark:text-purple-400" />
+                  <motion.span
+                    animate={{
+                      display: animate ? (open ? "inline-block" : "none") : "inline-block",
+                      opacity: animate ? (open ? 1 : 0) : 1,
+                    }}
+                    className="text-purple-700 dark:text-purple-300 font-medium truncate"
+                  >
+                    Database Manager
+                  </motion.span>
+                </Button>
+              </TooltipTrigger>
+              {!open && (
+                <TooltipContent side="right" className="font-medium">
+                  Database Manager
+                </TooltipContent>
               )}
-              title="Milvus Database Manager (Admin)"
-            >
-              <IconDatabase className="text-purple-600 dark:text-purple-400 shrink-0 w-5 h-5" />
-              <motion.span
-                animate={{
-                  display: animate ? (open ? "inline-block" : "none") : "inline-block",
-                  opacity: animate ? (open ? 1 : 0) : 1,
-                }}
-                className="text-purple-700 dark:text-purple-300 text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0 font-medium"
-              >
-                Database Manager
-              </motion.span>
-            </button>
+            </Tooltip>
           </div>
         )}
       </motion.div>
 
-      {/* ✅ Milvus Manager Modal */}
+      {/* Milvus Manager Modal */}
       {showMilvusManager && token && (
         <MilvusManager
           authToken={token}
@@ -148,23 +193,28 @@ export const MobileSidebar = ({
   ...props
 }: React.ComponentProps<"div">) => {
   const { open, setOpen } = useSidebar();
-  const { token, isAdmin } = useAuth(); // ✅ Get auth context
-  const [showMilvusManager, setShowMilvusManager] = useState(false); // ✅ State for modal
+  const { token, isAdmin } = useAuth();
+  const [showMilvusManager, setShowMilvusManager] = useState(false);
 
   return (
     <>
       <div
         className={cn(
-          "h-10 px-4 py-4 flex flex-row md:hidden items-center justify-between bg-neutral-100 dark:bg-neutral-800 w-full"
+          "h-14 px-4 flex flex-row md:hidden items-center justify-between bg-sidebar border-b border-sidebar-border"
         )}
         {...props}
       >
-        <div className="flex justify-end z-20 w-full">
-          <IconMenu2
-            className="text-neutral-800 dark:text-neutral-200"
-            onClick={() => setOpen(!open)}
-          />
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+            <span className="text-primary-foreground font-bold text-sm">भ</span>
+          </div>
+          <span className="font-semibold text-sidebar-foreground">RAG Portal</span>
         </div>
+        <IconMenu2
+          className="text-sidebar-foreground cursor-pointer"
+          onClick={() => setOpen(!open)}
+        />
+        
         <AnimatePresence>
           {open && (
             <motion.div
@@ -176,33 +226,48 @@ export const MobileSidebar = ({
                 ease: "easeInOut",
               }}
               className={cn(
-                "fixed h-full w-full inset-0 bg-white dark:bg-neutral-900 p-10 z-[100] flex flex-col justify-between",
+                "fixed h-full w-full inset-0 bg-sidebar z-[100] flex flex-col",
                 className
               )}
             >
-              <div
-                className="absolute right-10 top-10 z-50 text-neutral-800 dark:text-neutral-200"
-                onClick={() => setOpen(!open)}
-              >
-                <IconX />
+              {/* Tricolor top bar */}
+              <div className="h-1 tricolor-bar" />
+              
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                    <span className="text-primary-foreground font-bold text-sm">भ</span>
+                  </div>
+                  <span className="font-semibold text-sidebar-foreground">RAG Portal</span>
+                </div>
+                <IconX
+                  className="text-sidebar-foreground cursor-pointer"
+                  onClick={() => setOpen(!open)}
+                />
               </div>
-              <div className="flex-1">{children}</div>
 
-              {/* ✅ Admin-only Database Manager Button - Mobile */}
+              {/* Main navigation */}
+              <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+                {children}
+              </nav>
+
+              {/* Admin-only Database Manager Button - Mobile */}
               {isAdmin && (
-                <div className="pt-4 border-t border-neutral-300 dark:border-neutral-700">
-                  <button
+                <div className="p-4 border-t border-sidebar-border">
+                  <Button
+                    variant="ghost"
                     onClick={() => {
                       setShowMilvusManager(true);
                       setOpen(false);
                     }}
-                    className="flex items-center gap-3 w-full py-3 px-4 hover:bg-purple-500/10 dark:hover:bg-purple-500/20 rounded-lg transition-colors"
+                    className="w-full justify-start gap-3 h-11 px-3 hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400"
                   >
-                    <IconDatabase className="text-purple-600 dark:text-purple-400 w-6 h-6" />
-                    <span className="text-purple-700 dark:text-purple-300 text-base font-medium">
+                    <IconDatabase className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                    <span className="text-purple-700 dark:text-purple-300 font-medium">
                       Database Manager
                     </span>
-                  </button>
+                  </Button>
                 </div>
               )}
             </motion.div>
@@ -210,7 +275,7 @@ export const MobileSidebar = ({
         </AnimatePresence>
       </div>
 
-      {/* ✅ Milvus Manager Modal - Mobile */}
+      {/* Milvus Manager Modal - Mobile */}
       {showMilvusManager && token && (
         <MilvusManager
           authToken={token}
@@ -231,7 +296,6 @@ export const SidebarLink = ({
 }) => {
   const { open, animate } = useSidebar();
 
-  // ✅ Handle both href and onClick
   const handleClick = (e: React.MouseEvent) => {
     if (link.onClick) {
       e.preventDefault();
@@ -240,26 +304,37 @@ export const SidebarLink = ({
   };
 
   return (
-    <a
-      href={link.href}
-      onClick={handleClick}
-      className={cn(
-        "flex items-center justify-start gap-2 group/sidebar py-2",
-        className
-      )}
-      {...props}
-    >
-      {link.icon}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          href={link.href}
+          onClick={handleClick}
+          className={cn(
+            "flex items-center gap-3 h-11 px-3 transition-all duration-200 rounded-md",
+            "hover:bg-primary/10 hover:text-primary",
+            open ? "justify-start" : "justify-center px-2",
+            className
+          )}
+          {...props}
+        >
+          <span className="shrink-0">{link.icon}</span>
 
-      <motion.span
-        animate={{
-          display: animate ? (open ? "inline-block" : "none") : "inline-block",
-          opacity: animate ? (open ? 1 : 0) : 1,
-        }}
-        className="text-neutral-700 dark:text-neutral-200 text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
-      >
-        {link.label}
-      </motion.span>
-    </a>
+          <motion.span
+            animate={{
+              display: animate ? (open ? "inline-block" : "none") : "inline-block",
+              opacity: animate ? (open ? 1 : 0) : 1,
+            }}
+            className="text-sidebar-foreground group-hover:text-primary text-sm truncate whitespace-nowrap"
+          >
+            {link.label}
+          </motion.span>
+        </a>
+      </TooltipTrigger>
+      {!open && (
+        <TooltipContent side="right" className="font-medium">
+          {link.label}
+        </TooltipContent>
+      )}
+    </Tooltip>
   );
 };

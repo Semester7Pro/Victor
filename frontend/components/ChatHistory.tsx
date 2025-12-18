@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/lib/ThemeContext";
+import { Plus, Trash2, MessageCircle, Clock } from "lucide-react";
 
 interface Message {
   message_id: string;
@@ -153,7 +154,8 @@ export default function ChatHistory() {
   };
 
   // Delete conversation
-  const deleteConversation = async (conversationId: string) => {
+  const deleteConversation = async (conversationId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
       const response = await fetch(
         `${API_BASE}/conversations/${conversationId}`,
@@ -173,76 +175,72 @@ export default function ChatHistory() {
     }
   };
 
-  const bgClass = isDark ? "bg-neutral-900" : "bg-white";
-  const textClass = isDark ? "text-white" : "text-gray-900";
-  const borderClass = isDark ? "border-neutral-700" : "border-gray-200";
-  const hoverClass = isDark
-    ? "hover:bg-neutral-800"
-    : "hover:bg-gray-50";
-  const messageUserBg = isDark ? "bg-cyan-600" : "bg-cyan-500";
-  const messageAssistantBg = isDark ? "bg-neutral-800" : "bg-gray-100";
-  const messageUserText = isDark ? "text-white" : "text-white";
-  const messageAssistantText = isDark ? "text-gray-100" : "text-gray-900";
-
   return (
-    <div className={`flex h-screen ${bgClass} ${textClass}`}>
+    <div className={`flex h-screen ${isDark ? "bg-neutral-900" : "bg-white"} rounded-xl overflow-hidden border ${isDark ? "border-neutral-700" : "border-gray-200"}`}>
       {/* Sidebar - Conversations List */}
-      <div
-        className={`w-64 border-r ${borderClass} flex flex-col ${isDark ? "bg-neutral-950" : "bg-gray-50"}`}
-      >
-        {/* New Chat Button */}
-        <button
-          onClick={createNewConversation}
-          className={`m-4 px-4 py-2 rounded-lg font-semibold transition-colors ${
-            isDark
-              ? "bg-cyan-600 hover:bg-cyan-700 text-white"
-              : "bg-cyan-500 hover:bg-cyan-600 text-white"
-          }`}
-        >
-          + New Chat
-        </button>
+      <div className={`w-72 border-r ${isDark ? "border-neutral-700" : "border-gray-200"} flex flex-col ${isDark ? "bg-neutral-900/30" : "bg-gray-50/30"}`}>
+        {/* Header */}
+        <div className={`p-4 border-b ${isDark ? "border-neutral-700" : "border-gray-200"}`}>
+          <button
+            onClick={createNewConversation}
+            className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
+              isDark
+                ? "bg-cyan-600 hover:bg-cyan-700 text-white"
+                : "bg-cyan-500 hover:bg-cyan-600 text-white"
+            }`}
+          >
+            <Plus className="w-4 h-4" />
+            New Chat
+          </button>
+        </div>
 
         {/* Conversations List */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {conversations.length === 0 ? (
-            <div className={`p-4 text-center text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+            <div className={`text-center py-8 text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
               No conversations yet
             </div>
           ) : (
             conversations.map((conv) => (
               <div
                 key={conv.conversation_id}
-                className={`border-b ${borderClass}`}
+                onClick={() => setSelectedConversation(conv.conversation_id)}
+                className={`group relative p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                  selectedConversation === conv.conversation_id
+                    ? isDark
+                      ? "bg-cyan-600/15 border border-cyan-600/30"
+                      : "bg-cyan-500/15 border border-cyan-500/30"
+                    : `hover:${isDark ? "bg-neutral-800" : "bg-gray-100"} border border-transparent`
+                }`}
               >
-                <button
-                  onClick={() => setSelectedConversation(conv.conversation_id)}
-                  className={`w-full text-left p-3 transition-colors ${
+                <div className="flex items-start gap-3">
+                  <div className={`p-2 rounded-lg ${
                     selectedConversation === conv.conversation_id
-                      ? isDark
-                        ? "bg-neutral-800"
-                        : "bg-gray-100"
-                      : hoverClass
-                  }`}
-                >
-                  <div className="text-sm font-medium truncate">{conv.title}</div>
-                  <div
-                    className={`text-xs mt-1 ${isDark ? "text-gray-400" : "text-gray-500"}`}
-                  >
-                    {new Date(conv.updated_at).toLocaleDateString()}
+                      ? isDark ? "bg-cyan-600/20" : "bg-cyan-500/20"
+                      : isDark ? "bg-neutral-800" : "bg-gray-100"
+                  }`}>
+                    <MessageCircle className={`w-4 h-4 ${isDark ? "text-cyan-400" : "text-cyan-600"}`} />
                   </div>
-                </button>
-
-                {/* Delete Button */}
-                <button
-                  onClick={() => deleteConversation(conv.conversation_id)}
-                  className={`w-full text-left px-3 py-1 text-xs ${
-                    isDark
-                      ? "text-red-400 hover:text-red-300"
-                      : "text-red-600 hover:text-red-700"
-                  } transition-colors`}
-                >
-                  Delete
-                </button>
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-medium text-sm truncate ${isDark ? "text-white" : "text-gray-900"}`}>
+                      {conv.title}
+                    </p>
+                    <div className={`flex items-center gap-1 mt-1 text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+                      <Clock className="w-3 h-3" />
+                      {new Date(conv.updated_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => deleteConversation(conv.conversation_id, e)}
+                    className={`opacity-0 group-hover:opacity-100 h-7 w-7 flex items-center justify-center rounded transition-all duration-200 ${
+                      isDark
+                        ? "text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                        : "text-red-600 hover:text-red-700 hover:bg-red-600/10"
+                    }`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -250,83 +248,95 @@ export default function ChatHistory() {
       </div>
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col`}>
+      <div className="flex-1 flex flex-col">
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4">
           {error && (
-            <div
-              className={`p-4 rounded-lg ${
-                isDark
-                  ? "bg-red-900/30 text-red-300 border border-red-700"
-                  : "bg-red-50 text-red-700 border border-red-200"
-              }`}
-            >
+            <div className={`mb-4 p-3 rounded-lg text-sm ${
+              isDark
+                ? "bg-red-900/30 text-red-300 border border-red-700"
+                : "bg-red-50 text-red-700 border border-red-200"
+            }`}>
               {error}
             </div>
           )}
 
           {messages.length === 0 ? (
-            <div
-              className={`text-center py-12 ${isDark ? "text-gray-400" : "text-gray-500"}`}
-            >
-              <p className="text-lg font-medium">No messages yet</p>
-              <p className="text-sm mt-2">Start a conversation to see chat history</p>
+            <div className="flex flex-col items-center justify-center h-full text-center py-12">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${
+                isDark ? "bg-cyan-600/10" : "bg-cyan-500/10"
+              }`}>
+                <MessageCircle className={`w-8 h-8 ${isDark ? "text-cyan-400" : "text-cyan-600"}`} />
+              </div>
+              <h3 className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
+                No messages yet
+              </h3>
+              <p className={`text-sm mt-1 ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+                Start a conversation to see chat history
+              </p>
             </div>
           ) : (
-            messages.map((msg, index) => (
-              <div key={msg.message_id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div className="space-y-4">
+              {messages.map((msg) => (
                 <div
-                  className={`max-w-2xl px-4 py-2 rounded-lg ${
-                    msg.role === "user"
-                      ? `${messageUserBg} ${messageUserText}`
-                      : `${messageAssistantBg} ${messageAssistantText}`
-                  }`}
+                  key={msg.message_id}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                  
-                  {/* Show sources if available */}
-                  {msg.sources && msg.sources.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-current border-opacity-20">
-                      <p className="text-xs font-semibold mb-1">Sources:</p>
-                      {msg.sources.map((source, idx) => (
-                        <div key={idx} className="text-xs opacity-80">
-                          <span className="font-medium">{source.source}</span>
-                          {source.page && ` (p. ${source.page})`}
-                          {source.score && ` - Score: ${(source.score * 100).toFixed(0)}%`}
+                  <div
+                    className={`max-w-[70%] rounded-2xl px-4 py-3 ${
+                      msg.role === "user"
+                        ? `${isDark ? "bg-cyan-600" : "bg-cyan-500"} text-white rounded-br-md`
+                        : `${isDark ? "bg-neutral-800" : "bg-gray-100"} ${isDark ? "text-gray-100" : "text-gray-900"} rounded-bl-md`
+                    }`}
+                  >
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+
+                    {/* Sources */}
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-current/20">
+                        <p className="text-xs font-medium mb-2 opacity-80">Sources:</p>
+                        <div className="space-y-1">
+                          {msg.sources.map((source, idx) => (
+                            <p key={idx} className="text-xs opacity-70">
+                              📄 {source.source}
+                              {source.page && ` (p. ${source.page})`}
+                              {source.score && ` - ${(source.score * 100).toFixed(0)}%`}
+                            </p>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  <p className={`text-xs mt-1 opacity-70`}>
-                    {new Date(msg.created_at).toLocaleTimeString()}
-                  </p>
+                      </div>
+                    )}
+
+                    <p className="text-xs mt-2 opacity-60">
+                      {new Date(msg.created_at).toLocaleTimeString()}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
           )}
-          <div ref={messagesEndRef} />
         </div>
 
         {/* Input Area */}
-        <div className={`border-t ${borderClass} p-4`}>
-          <form onSubmit={sendMessage} className="flex gap-2">
+        <div className={`p-4 border-t ${isDark ? "border-neutral-700 bg-neutral-900/30" : "border-gray-200 bg-gray-50/30"}`}>
+          <form onSubmit={sendMessage} className="flex gap-3">
             <input
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="Ask a question..."
               disabled={loading}
-              className={`flex-1 px-4 py-2 rounded-lg border ${borderClass} focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
+              className={`flex-1 px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all duration-200 ${
                 isDark
-                  ? "bg-neutral-800 text-white placeholder-gray-500"
-                  : "bg-gray-50 text-gray-900 placeholder-gray-400"
+                  ? "bg-neutral-800 text-white placeholder-gray-500 border-neutral-700"
+                  : "bg-white text-gray-900 placeholder-gray-400 border-gray-300"
               } disabled:opacity-50`}
             />
             <button
               type="submit"
               disabled={loading || !inputValue.trim()}
-              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+              className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
                 isDark
                   ? "bg-cyan-600 hover:bg-cyan-700 text-white disabled:opacity-50"
                   : "bg-cyan-500 hover:bg-cyan-600 text-white disabled:opacity-50"

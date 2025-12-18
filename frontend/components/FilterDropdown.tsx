@@ -1,7 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Filter, X, Calendar } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface FilterDropdownProps {
   onFilterChange: (filters: SearchFilters) => void;
@@ -73,148 +89,142 @@ export default function FilterDropdown({ onFilterChange, currentFilters }: Filte
 
   return (
     <div className="relative">
-      {/* Filter Button - ✅ Added type="button" to prevent form submission */}
+      {/* Filter Button */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => setIsOpen(true)}
         className={`p-3 rounded-lg transition-all flex items-center gap-2 ${
           hasActiveFilters
-            ? "bg-blue-500/20 border border-blue-500/50 text-blue-400"
-            : "bg-neutral-800/60 border border-neutral-700/50 text-neutral-300 hover:bg-neutral-700/60"
+            ? "bg-primary/20 border border-primary/50 text-primary"
+            : "bg-muted border border-border text-foreground hover:bg-muted/80"
         }`}
         title="Filter documents"
       >
         <Filter className="w-5 h-5" />
         {hasActiveFilters && (
-          <span className="text-xs font-semibold bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center">
+          <span className="text-xs font-semibold bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center">
             {Object.values(filters).filter(v => v && v.trim() !== "").length}
           </span>
         )}
       </button>
 
-      {/* Filter Dropdown - OPENS UPWARD */}
-      {isOpen && (
-        <div className="absolute bottom-14 left-0 w-96 bg-neutral-900/98 backdrop-blur-xl rounded-xl shadow-2xl border border-neutral-700/50 z-50 max-h-[500px] overflow-hidden flex flex-col">
-          {/* Header - Sticky */}
-          <div className="bg-neutral-900/98 border-b border-neutral-700/50 px-4 py-3 flex items-center justify-between flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-neutral-400" />
-              <h3 className="font-semibold text-neutral-200">Filter Documents</h3>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="p-1 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-neutral-100"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+      {/* Filter Dialog */}
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="sm:max-w-md bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground">
+              <Filter className="h-5 w-5 text-primary" />
+              Filter Documents
+            </DialogTitle>
+          </DialogHeader>
 
-          {/* Scrollable Filter Fields */}
-          <div className="overflow-y-auto flex-1 p-4 space-y-4">
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
             {/* Category Filter */}
-            <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">
-                Category
-              </label>
-              <select
-                value={filters.category || ""}
-                onChange={(e) => handleFilterChange("category", e.target.value)}
-                className="w-full px-3 py-2 bg-neutral-800/60 border border-neutral-700/50 rounded-lg text-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            <div className="space-y-2">
+              <Label className="text-foreground">Category</Label>
+              <Select 
+                value={filters.category || "all"} 
+                onValueChange={(value) => handleFilterChange("category", value === "all" ? "" : value)}
               >
-                <option value="">All Categories</option>
-                {CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat.replace(/_/g, " ").replace(/scraped |moe /gi, "")}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="bg-muted border-border">
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat.replace(/_/g, " ").replace(/scraped |moe /gi, "")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Language Filter */}
-            <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">
-                Language
-              </label>
-              <select
-                value={filters.language || ""}
-                onChange={(e) => handleFilterChange("language", e.target.value)}
-                className="w-full px-3 py-2 bg-neutral-800/60 border border-neutral-700/50 rounded-lg text-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            <div className="space-y-2">
+              <Label className="text-foreground">Language</Label>
+              <Select 
+                value={filters.language || "all"} 
+                onValueChange={(value) => handleFilterChange("language", value === "all" ? "" : value)}
               >
-                <option value="">All Languages</option>
-                {LANGUAGES.map((lang) => (
-                  <option key={lang} value={lang}>
-                    {lang}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="bg-muted border-border">
+                  <SelectValue placeholder="All Languages" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Languages</SelectItem>
+                  {LANGUAGES.map((lang) => (
+                    <SelectItem key={lang} value={lang}>
+                      {lang}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Document Type Filter */}
-            <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">
-                Document Type
-              </label>
-              <select
-                value={filters.document_type || ""}
-                onChange={(e) => handleFilterChange("document_type", e.target.value)}
-                className="w-full px-3 py-2 bg-neutral-800/60 border border-neutral-700/50 rounded-lg text-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            <div className="space-y-2">
+              <Label className="text-foreground">Document Type</Label>
+              <Select 
+                value={filters.document_type || "all"} 
+                onValueChange={(value) => handleFilterChange("document_type", value === "all" ? "" : value)}
               >
-                <option value="">All Types</option>
-                {DOCUMENT_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type.toUpperCase()}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="bg-muted border-border">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {DOCUMENT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type.toUpperCase()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Document ID Search */}
-            <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">
-                Document ID (contains)
-              </label>
-              <input
-                type="text"
+            <div className="space-y-2">
+              <Label className="text-foreground">Document ID (contains)</Label>
+              <Input
                 value={filters.document_id || ""}
                 onChange={(e) => handleFilterChange("document_id", e.target.value)}
                 placeholder="e.g., RTEAct, NEP2020, RUSA"
-                className="w-full px-3 py-2 bg-neutral-800/60 border border-neutral-700/50 rounded-lg text-neutral-200 text-sm placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="bg-muted border-border"
               />
             </div>
 
             {/* Date Range Filter */}
-            <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2 flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
+            <div className="space-y-2">
+              <Label className="text-foreground flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
                 Published Date Range
-              </label>
+              </Label>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <input
+                  <Input
                     type="date"
                     value={filters.date_from || ""}
                     onChange={(e) => handleFilterChange("date_from", e.target.value)}
-                    className="w-full px-3 py-2 bg-neutral-800/60 border border-neutral-700/50 rounded-lg text-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    className="bg-muted border-border"
                   />
-                  <p className="text-xs text-neutral-500 mt-1">From</p>
+                  <p className="text-xs text-muted-foreground mt-1">From</p>
                 </div>
                 <div>
-                  <input
+                  <Input
                     type="date"
                     value={filters.date_to || ""}
                     onChange={(e) => handleFilterChange("date_to", e.target.value)}
-                    className="w-full px-3 py-2 bg-neutral-800/60 border border-neutral-700/50 rounded-lg text-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    className="bg-muted border-border"
                   />
-                  <p className="text-xs text-neutral-500 mt-1">To</p>
+                  <p className="text-xs text-muted-foreground mt-1">To</p>
                 </div>
               </div>
             </div>
 
             {/* Active Filters */}
             {hasActiveFilters && (
-              <div>
-                <p className="text-xs font-medium text-neutral-400 mb-2">Active Filters:</p>
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Active Filters:</p>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(filters).map(([key, value]) => {
                     if (!value || value.trim() === "") return null;
@@ -223,7 +233,7 @@ export default function FilterDropdown({ onFilterChange, currentFilters }: Filte
                         key={key}
                         type="button"
                         onClick={() => clearSingleFilter(key as keyof SearchFilters)}
-                        className="px-2 py-1 bg-blue-500/20 border border-blue-500/50 text-blue-300 rounded-md text-xs flex items-center gap-1 hover:bg-blue-500/30 transition"
+                        className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary rounded-md text-xs flex items-center gap-1 hover:bg-primary/30 transition"
                       >
                         <span className="font-medium">{key}:</span>
                         <span>{value.length > 20 ? value.substring(0, 20) + "..." : value}</span>
@@ -236,26 +246,25 @@ export default function FilterDropdown({ onFilterChange, currentFilters }: Filte
             )}
           </div>
 
-          {/* Action Buttons - Sticky */}
-          <div className="bg-neutral-900/98 border-t border-neutral-700/50 px-4 py-3 flex gap-2 flex-shrink-0">
-            <button
-              type="button"
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
               onClick={clearFilters}
               disabled={!hasActiveFilters}
-              className="flex-1 px-4 py-2 bg-neutral-800/60 border border-neutral-700/50 text-neutral-300 rounded-lg text-sm font-medium hover:bg-neutral-700/60 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="flex-1 border-border hover:bg-muted"
             >
               Clear All
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
               onClick={applyFilters}
-              className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition"
+              className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               Apply Filters
-            </button>
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

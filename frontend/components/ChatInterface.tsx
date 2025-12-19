@@ -7,7 +7,22 @@ import { useRouter } from 'next/navigation';
 import DockRoot from '@/components/Dock';
 import VoiceInput from '@/components/VoiceInput';
 import FilterDropdown, { SearchFilters } from '@/components/FilterDropdown';
-import { ArrowLeft, User } from 'lucide-react';
+import { Moon, Sun, Wifi, User, Bot, Filter, Languages, Mic, MicOff, Send, GitCompare } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+import ThemeToggle from "@/components/ThemeToggle";
+
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 
 interface Message {
   message_id: string;
@@ -19,15 +34,8 @@ interface Message {
     source_file?: string;
     page_idx?: number;
     score?: number;
-    global_chunk_id?: string;
-    document_id?: string;
-    chunk_index?: number;
-    section_hierarchy?: string;
-    char_count?: number;
-    word_count?: number;
     document_name?: string;
     page?: number;
-    source?: string;
   }>;
 }
 
@@ -43,29 +51,29 @@ interface ChatResponse {
   method: string;
   answer: string;
   conversation_id: string;
-  sources?: Array<{
-    text: string;
-    source_file?: string;
-    page_idx?: number;
-    score?: number;
-    global_chunk_id?: string;
-    document_id?: string;
-    chunk_index?: number;
-    section_hierarchy?: string;
-    char_count?: number;
-    word_count?: number;
-    document_name?: string;
-    page?: number;
-    source?: string;
-  }>;
+  sources?: Array<any>;
 }
 
 interface ChatInterfaceProps {
   authToken: string;
   userName?: string;
+  userAvatar?: string;
 }
 
-export default function ChatInterface({ authToken, userName = 'User' }: ChatInterfaceProps) {
+const languages = [
+  { code: "en", label: "English", flag: "🇬🇧" },
+  { code: "hi", label: "हिंदी", flag: "🇮🇳" },
+  { code: "ta", label: "தமிழ்", flag: "🇮🇳" },
+  { code: "te", label: "తెలుగు", flag: "🇮🇳" },
+  { code: "bn", label: "বাংলা", flag: "🇮🇳" },
+  { code: "mr", label: "मराठी", flag: "🇮🇳" },
+  { code: "gu", label: "ગુજરાતી", flag: "🇮🇳" },
+  { code: "kn", label: "ಕನ್ನಡ", flag: "🇮🇳" },
+  { code: "ml", label: "മലയാളം", flag: "🇮🇳" },
+  { code: "pa", label: "ਪੰਜਾਬੀ", flag: "🇮🇳" },
+];
+
+export default function ChatInterface({ authToken, userName = 'User', userAvatar }: ChatInterfaceProps) {
   const [compareOpen, setCompareOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<string | null>(null);
@@ -77,17 +85,19 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
   const [topK, setTopK] = useState(3);
   const [temperature, setTemperature] = useState(0.1);
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // const [isDarkMode, setIsDarkMode] = useState(true);
+  const [selectedLanguage, setSelectedLanguage] = useState("en");
+  const [isRecording, setIsRecording] = useState(false);
+  const [showFilter, setShowFilter] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const router = useRouter();
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  // Scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Load conversation messages when selected
   useEffect(() => {
     if (currentConversation) {
       fetchMessages(currentConversation);
@@ -96,7 +106,6 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
 
   const loadConversations = useCallback(async () => {
     if (!authToken) return;
-
     try {
       const response = await fetch(`${API_URL}/conversations`, {
         headers: {
@@ -108,7 +117,6 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
         const data = await response.json();
         const convs = data.conversations || [];
         setConversations(convs);
-        // Auto-select first conversation
         if (convs.length > 0 && !currentConversation) {
           setCurrentConversation(convs[0].conversation_id);
           setCurrentTitle(convs[0].title);
@@ -119,14 +127,12 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
     }
   }, [authToken, API_URL, currentConversation]);
 
-  // Load conversations on mount (only if authenticated)
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
 
   const fetchMessages = async (conversationId: string) => {
     try {
-      console.log(`📥 Fetching messages for conversation: ${conversationId}`);
       const response = await fetch(
         `${API_URL}/conversations/${conversationId}/messages`,
         {
@@ -138,21 +144,15 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
       );
       if (response.ok) {
         const data = await response.json();
-        console.log(`✅ Loaded ${data.messages?.length || 0} messages`);
-        console.log('📋 Messages data:', data.messages);
         setMessages(data.messages || []);
-      } else {
-        const errorData = await response.json();
-        console.error('❌ Failed to load messages:', errorData);
       }
     } catch (error) {
-      console.error('❌ Error loading messages:', error);
+      console.error('Error loading messages:', error);
     }
   };
 
   const createNewChat = async () => {
     try {
-      console.log('🆕 Creating new conversation...');
       const response = await fetch(`${API_URL}/conversations`, {
         method: 'POST',
         headers: {
@@ -164,8 +164,6 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Conversation created:', data);
-
         const newConversation: Conversation = {
           conversation_id: data.conversation_id,
           title: data.title || 'New Conversation',
@@ -179,41 +177,25 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
         setCurrentTitle(data.title || 'New Conversation');
         setMessages([]);
         setInputValue('');
-        console.log('✅ UI updated with new conversation');
-      } else {
-        const errorData = await response.json();
-        console.error('❌ Failed to create conversation:', errorData);
-        alert(`Failed to create new chat: ${errorData.detail || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('❌ Error creating conversation:', error);
-      alert('Failed to create new chat');
+      console.error('Error creating conversation:', error);
     }
   };
 
   const handleFilterChange = (newFilters: SearchFilters) => {
-    console.log('🔍 Filters updated:', newFilters);
     setSearchFilters(newFilters);
   };
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || !currentConversation) {
-      console.log('❌ Cannot send: No input or no conversation selected');
-      return;
-    }
+    if (!inputValue.trim() || !currentConversation) return;
 
     const userMessage = inputValue;
     setInputValue('');
     setLoading(true);
 
     try {
-      console.log(`📤 Sending message to conversation: ${currentConversation}`);
-      console.log(`   Query: "${userMessage}"`);
-      console.log(`   Method: hybrid`);
-      console.log(`   Filters:`, searchFilters);
-      
-      // Add user message to UI immediately
       const userMsg: Message = {
         message_id: Date.now().toString(),
         role: 'user',
@@ -222,16 +204,14 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
       };
       setMessages(prev => [...prev, userMsg]);
 
-      // Build request body with filters
       const requestBody: any = {
         query: userMessage,
         conversation_id: currentConversation,
         top_k: topK,
         temperature,
-        method: "hybrid",  // ✅ Always use hybrid search
+        method: "hybrid",
       };
 
-      // ✅ Add filters if they exist (same as before)
       if (searchFilters.category) requestBody.category = searchFilters.category;
       if (searchFilters.language) requestBody.language = searchFilters.language;
       if (searchFilters.document_type) requestBody.document_type = searchFilters.document_type;
@@ -239,9 +219,6 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
       if (searchFilters.date_from) requestBody.date_from = searchFilters.date_from;
       if (searchFilters.date_to) requestBody.date_to = searchFilters.date_to;
 
-      console.log('📦 Request payload:', requestBody);
-
-      // Send to API
       const response = await fetch(`${API_URL}/ask`, {
         method: 'POST',
         headers: {
@@ -253,18 +230,6 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
 
       if (response.ok) {
         const data: ChatResponse = await response.json();
-        console.log(`✅ Received response from backend`);
-        console.log(`   Answer: "${data.answer.substring(0, 100)}..."`);
-        console.log(`   Sources: ${data.sources?.length || 0}`);
-        console.log(`   Method used: ${data.method || 'hybrid'}`);
-
-        if (!data.answer) {
-          console.error('⚠️ WARNING: No answer in response!');
-          alert('Received empty response from backend');
-          return;
-        }
-
-        // Add assistant message
         const assistantMsg: Message = {
           message_id: Date.now().toString() + '1',
           role: 'assistant',
@@ -274,7 +239,6 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
         };
         setMessages(prev => [...prev, assistantMsg]);
 
-        // Update conversation title if it's still "New Conversation"
         if (currentTitle === 'New Conversation') {
           const newTitle = userMessage.substring(0, 50);
           setCurrentTitle(newTitle);
@@ -286,14 +250,9 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
             )
           );
         }
-      } else {
-        const errorData = await response.json();
-        console.error('❌ Backend returned error:', errorData);
-        alert(`Failed to get response: ${errorData.detail || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('❌ Error sending message:', error);
-      alert('Error sending message');
+      console.error('Error sending message:', error);
     } finally {
       setLoading(false);
     }
@@ -301,7 +260,6 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
 
   const deleteConversation = async (conversationId: string) => {
     if (!window.confirm('Delete this conversation?')) return;
-
     try {
       await fetch(`${API_URL}/conversations/${conversationId}`, {
         method: 'DELETE',
@@ -310,10 +268,7 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
           'Content-Type': 'application/json',
         },
       });
-
-      setConversations(
-        conversations.filter((c) => c.conversation_id !== conversationId)
-      );
+      setConversations(conversations.filter((c) => c.conversation_id !== conversationId));
       if (currentConversation === conversationId) {
         setCurrentConversation(null);
         setMessages([]);
@@ -330,99 +285,46 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
     yesterday.setDate(yesterday.getDate() - 1);
 
     if (date.toDateString() === today.toDateString()) {
-      return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     } else if (date.toDateString() === yesterday.toDateString()) {
       return 'Yesterday';
     } else {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-      });
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
   };
 
-  const renderMarkdown = (text: string) => {
-    // Safety check for undefined or null text
-    if (!text || typeof text !== 'string') {
-      return '';
-    }
-    
-    const boldRegex = /\*\*(.*?)\*\*/g;
-    const withBold = text.replace(boldRegex, '<strong>$1</strong>');
+  // const handleVoiceToggle = () => {
+  //   setIsRecording(!isRecording);
+  // };
 
-    const lines = withBold.split('\n');
-    const processedLines = lines.map((line) => {
-      if (/^\d+\.\s/.test(line)) {
-        return line.replace(/^(\d+\.\s)(.*)/, '<li>$2</li>');
-      }
-      if (/^\*\s/.test(line)) {
-        return line.replace(/^\*\s(.*)/, '<li>$1</li>');
-      }
-      return line;
-    });
-
-    let result = '';
-    let inOrderedList = false;
-    let inUnorderedList = false;
-
-    for (let i = 0; i < processedLines.length; i++) {
-      const line = processedLines[i];
-      const isListItem = line.startsWith('<li>');
-      const nextIsListItem =
-        i < processedLines.length - 1 &&
-        processedLines[i + 1].startsWith('<li>');
-      const prevWasNumbered = i > 0 && /^\d+\./.test(lines[i - 1]);
-      const nextIsNumbered =
-        i < lines.length - 1 && /^\d+\./.test(lines[i + 1]);
-
-      if (isListItem) {
-        const currentIsNumbered = /^\d+\./.test(lines[i]);
-
-        if (!inOrderedList && !inUnorderedList) {
-          if (currentIsNumbered) {
-            result += '<ol>';
-            inOrderedList = true;
-          } else {
-            result += '<ul>';
-            inUnorderedList = true;
-          }
-        }
-
-        result += line;
-
-        if (!nextIsListItem) {
-          if (inOrderedList) {
-            result += '</ol>';
-            inOrderedList = false;
-          } else if (inUnorderedList) {
-            result += '</ul>';
-            inUnorderedList = false;
-          }
-        }
-      } else {
-        if (inOrderedList) {
-          result += '</ol>';
-          inOrderedList = false;
-        } else if (inUnorderedList) {
-          result += '</ul>';
-          inUnorderedList = false;
-        }
-        result += line;
-      }
-
-      if (i < processedLines.length - 1) {
-        result += '\n';
-      }
-    }
-
-    return result;
+  const handleVoiceTranscript = (transcript: string) => {
+    console.log('📝 Voice transcript received:', transcript);
+    setInputValue(transcript);
+    // Optionally auto-submit after receiving transcript
+    // setTimeout(() => {
+    //   if (transcript.trim()) {
+    //     const submitEvent = new Event('submit') as any;
+    //     sendMessage(submitEvent);
+    //   }
+    // }, 100);
   };
 
-  // 🌊 Dock items (left vertical dock)
-  const dockItems = [
+  const handleSend = () => {
+    if (inputValue.trim()) {
+      sendMessage(new Event('submit') as any);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const currentLanguage = languages.find((l) => l.code === selectedLanguage) || languages[0];
+
+const dockItems = [
     {
       // 1. Create new chat
       icon: (
@@ -550,19 +452,11 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
     },
   ];
 
-  const handleVoiceTranscript = (transcript: string) => {
-    console.log('📝 Voice transcript received:', transcript);
-    setInputValue(transcript);
-    // Optionally auto-send after transcription
-    // setTimeout(() => sendMessage(new Event('submit') as any), 100);
-  };
-
   return (
-    <div className="relative flex h-screen bg-gradient-to-br from-neutral-950 via-neutral-900 to-black">
-      {/* 🚀 Dock Sidebar (fixed on the left) */}
+    <div className="relative flex h-screen bg-background">
       <DockRoot
         items={dockItems}
-        className="bg-[#060010]/95 border-neutral-800/70 shadow-2xl shadow-black/60"
+        className="bg-card/95 border-border shadow-2xl"
         panelWidth={64}
         dockWidth={80}
         baseItemSize={48}
@@ -570,456 +464,251 @@ export default function ChatInterface({ authToken, userName = 'User' }: ChatInte
         distance={200}
       />
 
-      {/* Layout to the right of the dock */}
       <div className="flex-1 flex ml-4">
-        {/* 📚 Chat History Panel - EXISTING CODE */}
         {sidebarOpen && (
-          <div className="w-72 h-full bg-neutral-950/95 border border-neutral-800/70 rounded-2xl overflow-hidden backdrop-blur-xl flex flex-col mr-4">
-            {/* Header with Branding + Close Arrow */}
-            <div className="p-4 border-b border-neutral-800/50">
+          <div className="w-72 h-full bg-card border border-border rounded-2xl overflow-hidden backdrop-blur-xl flex flex-col mr-4">
+            <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-neutral-800 via-neutral-700 to-neutral-500 rounded-xl flex items-center justify-center shadow-lg shadow-neutral-500/20">
-                    <svg
-                      className="w-6 h-6 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2h-8"
-                      />
-                    </svg>
+                  <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
+                    <span className="text-xl text-primary-foreground">🇮🇳</span>
                   </div>
                   <div>
-                    <h2 className="font-bold text-lg bg-gradient-to-r from-neutral-50 to-neutral-300 bg-clip-text text-transparent">
-                      VICTOR
-                    </h2>
-                    <p className="text-xs text-neutral-500">
-                      AI Document Assistant
-                    </p>
+                    <h2 className="font-bold text-lg text-foreground">भारत RAG</h2>
+                    <p className="text-xs text-muted-foreground">AI Document Assistant</p>
                   </div>
                 </div>
-
-                {/* ⬅️ Close chat history */}
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="p-2 rounded-lg hover:bg-neutral-900/70 text-neutral-400 hover:text-neutral-100 transition"
-                  title="Close chat history"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 19l-7-7 7-7"
-                    />
+                <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="h-8 w-8">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
-                </button>
+                </Button>
               </div>
-
-              <button
-                onClick={createNewChat}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-neutral-100 to-neutral-300 hover:from-neutral-200 hover:to-neutral-400 rounded-xl transition-all text-neutral-900 font-semibold text-sm shadow-lg shadow-neutral-300/30 hover:shadow-neutral-200/60 hover:scale-[1.02] active:scale-[0.98]"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 4v16m8-8H4"
-                  />
+              <Button onClick={createNewChat} className="w-full gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 New Conversation
-              </button>
+              </Button>
             </div>
 
-            {/* Conversations List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {conversations.length === 0 ? (
-                <div className="text-center text-neutral-400 text-sm py-12">
-                  <svg
-                    className="w-12 h-12 mx-auto mb-3 opacity-30"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                    />
-                  </svg>
-                  <p className="font-medium text-neutral-500">No conversations</p>
-                  <p className="text-xs mt-1 text-neutral-600">
-                    Create one to get started
+            <ScrollArea className="flex-1 p-3">
+              <div className="space-y-2">
+                {conversations.length === 0 ? (
+                  <div className="text-center text-muted-foreground text-sm py-12">
+                    <p className="font-medium">No conversations</p>
+                    <p className="text-xs mt-1">Create one to get started</p>
+                  </div>
+                ) : (
+                  conversations.map((conv) => (
+                    <div
+                      key={conv.conversation_id}
+                      onClick={() => {
+                        setCurrentConversation(conv.conversation_id);
+                        setCurrentTitle(conv.title);
+                      }}
+                      className={cn(
+                        "p-3 rounded-xl cursor-pointer transition-all group",
+                        currentConversation === conv.conversation_id
+                          ? "bg-primary/10 border border-primary"
+                          : "bg-muted border border-border hover:border-primary/50"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm truncate text-foreground">{conv.title}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{formatDate(conv.updated_at)}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteConversation(conv.conversation_id);
+                          }}
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+
+        <div className="flex-1 flex flex-col bg-background">
+          <header className="flex items-center justify-between px-4 py-3 bg-card border-b border-border">
+            <div className="flex items-center gap-3">
+              <div>
+                <h1 className="text-lg font-semibold text-foreground">{currentTitle || 'New Conversation'}</h1>
+                <p className="text-sm text-muted-foreground">
+                  {messages.length > 0 ? `${messages.length} message${messages.length !== 1 ? 's' : ''}` : 'Ask anything about your documents'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 text-accent">
+                <Wifi className="h-4 w-4" />
+                <span className="text-sm font-medium">LangChain RAG</span>
+                <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+              </div>
+
+              {/* <Button variant="outline" size="icon" onClick={() => setIsDarkMode(!isDarkMode)} className="h-9 w-9 rounded-full">
+                {isDarkMode ? <Sun className="h-4 w-4 text-primary" /> : <Moon className="h-4 w-4 text-secondary" />}
+              </Button> */}
+              <ThemeToggle />
+
+
+              <div className="flex items-center gap-2">
+                <Avatar className="h-9 w-9 border-2 border-primary">
+                  <AvatarImage src={userAvatar} alt={userName} />
+                  <AvatarFallback className="bg-primary text-primary-foreground font-medium">
+                    {userName.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="hidden sm:block">
+                  <p className="text-sm font-medium text-foreground">{userName}</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                    Online
                   </p>
                 </div>
+              </div>
+            </div>
+          </header>
+
+          <ScrollArea className="flex-1 px-4 py-6">
+            <div className="max-w-3xl mx-auto space-y-6">
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full py-20 text-center">
+                  <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <span className="text-4xl">🇮🇳</span>
+                  </div>
+                  <h2 className="text-xl font-semibold text-foreground mb-2">Welcome to भारत RAG Portal</h2>
+                  <p className="text-muted-foreground max-w-md">
+                    Ask questions about government policies, acts, and documents. Use voice input or type in your preferred language.
+                  </p>
+                  <div className="flex gap-2 mt-6 flex-wrap justify-center">
+                    {["NEP 2020", "RTI Act", "Digital India", "Ayushman Bharat"].map((tag) => (
+                      <span key={tag} className="px-3 py-1.5 rounded-full text-sm bg-primary/10 text-primary border border-primary/20 cursor-pointer hover:bg-primary/20 transition-colors">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               ) : (
-                conversations.map((conv) => (
-                  <div
-                    key={conv.conversation_id}
-                    onClick={() => {
-                      setCurrentConversation(conv.conversation_id);
-                      setCurrentTitle(conv.title);
-                    }}
-                    className={`p-3 rounded-xl cursor-pointer transition-all group ${
-                      currentConversation === conv.conversation_id
-                        ? 'bg-gradient-to-r from-neutral-800/60 to-neutral-700/60 border border-neutral-500/60 shadow-lg shadow-black/40'
-                        : 'bg-neutral-900/60 border border-neutral-800/50 hover:border-neutral-700 hover:bg-neutral-900/80 hover:shadow-lg hover:shadow-black/40'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p
-                          className={`font-semibold text-sm truncate ${
-                            currentConversation === conv.conversation_id
-                              ? 'text-neutral-50'
-                              : 'text-neutral-300'
-                          }`}
-                        >
-                          {conv.title}
-                        </p>
-                        <p className="text-xs text-neutral-500 mt-1">
-                          {formatDate(conv.updated_at)}
-                        </p>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteConversation(conv.conversation_id);
-                        }}
-                        className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200"
-                        title="Delete conversation"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
+                messages.map((message) => (
+                  <div key={message.message_id} className={cn("flex gap-3 animate-fade-in", message.role === 'user' ? "flex-row-reverse" : "flex-row")}>
+                    <div className={cn("flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center", message.role === 'user' ? "bg-primary" : "bg-secondary")}>
+                      {message.role === 'user' ? <User className="h-4 w-4 text-primary-foreground" /> : <Bot className="h-4 w-4 text-secondary-foreground" />}
+                    </div>
+                    <div className={cn("max-w-[70%] rounded-2xl px-4 py-3 shadow-sm", message.role === 'user' ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-chat-assistant text-foreground rounded-bl-sm")}>
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                      <p className={cn("text-xs mt-2", message.role === 'user' ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                        {new Date(message.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
                     </div>
                   </div>
                 ))
               )}
+              <div ref={bottomRef} />
             </div>
-          </div>
-        )}
+          </ScrollArea>
 
-        {/* 🧠 Main Chat Area */}
-        <div className="flex-1 flex flex-col bg-neutral-900">
-          {/* Top Bar - UPDATED WITH BACK BUTTON AND USER INFO */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800/50 bg-neutral-950/80 backdrop-blur-xl">
-            {/* Left Side - Back Button + Title */}
-            <div className="flex items-center gap-4">
-              {/* Back to Home Button */}
-              <button
-                onClick={() => router.push('/')}
-                className="p-2 hover:bg-neutral-800/60 rounded-lg transition-all text-neutral-400 hover:text-neutral-100 group"
-                title="Back to home"
-              >
-                <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              </button>
-
-              <div className="h-6 w-px bg-neutral-700/50"></div>
-
-              <div>
-                <h1 className="text-lg font-bold text-white">
-                  {currentTitle || 'New Conversation'}
-                </h1>
-                <p className="text-xs text-neutral-500 mt-0.5">
-                  {messages.length > 0
-                    ? `${messages.length} message${
-                        messages.length !== 1 ? 's' : ''
-                      }`
-                    : 'Ask anything about your documents'}
-                </p>
-              </div>
-            </div>
-
-            {/* Right Side - User Info + Status */}
-            <div className="flex items-center gap-4">
-              {/* LangChain Status */}
-              <span className="text-xs text-neutral-500 hidden sm:flex items-center gap-1.5">
-                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                LangChain RAG
+          <div className="bg-card border-t border-border p-4">
+            <div className="flex justify-center mb-3">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                {currentLanguage.flag} {currentLanguage.label}
               </span>
-
-              <div className="h-6 w-px bg-neutral-700/50 hidden sm:block"></div>
-
-              {/* User Info */}
-              <div className="flex items-center gap-3 px-3 py-2 bg-neutral-900/60 rounded-lg border border-neutral-800/50">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-neutral-700 to-neutral-500 flex items-center justify-center border border-neutral-600">
-                  <User className="w-4 h-4 text-neutral-100" />
-                </div>
-                <div className="hidden sm:block">
-                  <p className="text-sm font-semibold text-neutral-200">
-                    {userName}
-                  </p>
-                  <p className="text-xs text-neutral-500">Online</p>
-                </div>
-              </div>
             </div>
-          </div>
 
-          {/* Messages Area - EXISTING CODE, NOT CHANGED */}
-          <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-neutral-900 via-neutral-900 to-black">
-            {messages.length === 0 && (
-              <div className="h-full flex items-center justify-center">
-                <div className="text-center max-w-md">
-                  <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-neutral-800 to-neutral-600 rounded-2xl flex items-center justify-center shadow-lg shadow-black/40">
-                    <svg
-                      className="w-8 h-8 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+            <div className="flex items-center gap-2">
+              {/* Filter Dropdown - Connected Component */}
+              <FilterDropdown 
+                onFilterChange={handleFilterChange}
+                currentFilters={searchFilters}
+              />
+              <TooltipProvider>
+              <DropdownMenu>
+                
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon" className="h-10 w-10 shrink-0">
+                        <Languages className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>Select Language</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="start" className="w-48">
+                  {languages.map((lang) => (
+                    <DropdownMenuItem
+                      key={lang.code}
+                      onClick={() => setSelectedLanguage(lang.code)}
+                      className={cn("flex items-center gap-2 cursor-pointer", selectedLanguage === lang.code && "bg-primary/10")}
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                      />
-                    </svg>
-                  </div>
-                  <h2 className="text-xl font-bold mb-2 bg-gradient-to-r from-neutral-50 to-neutral-300 bg-clip-text text-transparent">
-                    Ready to assist you
-                  </h2>
-                  <p className="text-neutral-400">
-                    Ask questions about your documents and I'll provide answers
-                    based on the content
-                  </p>
-                </div>
-              </div>
-            )}
-            <div className="max-w-4xl mx-auto space-y-6">
-              {messages.map((message, idx) => (
-                <div
-                  key={message.message_id || `msg-${idx}`}
-                  className={`flex ${
-                    message.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  <div
-                    className={`max-w-2xl px-5 py-4 rounded-2xl shadow-lg ${
-                      message.role === 'user'
-                        ? 'bg-gradient-to-r from-neutral-100 to-neutral-300 text-neutral-900 shadow-neutral-300/30'
-                        : 'bg-neutral-900/80 text-neutral-200 border border-neutral-800/50 shadow-black/60'
-                    }`}
-                  >
-                    <div
-                      className="text-sm leading-relaxed whitespace-pre-wrap [&_strong]:font-semibold [&_ol]:list-decimal [&_ol]:ml-6 [&_ul]:list-disc [&_ul]:ml-6 [&_li]:my-1.5"
-                      dangerouslySetInnerHTML={{
-                        __html: renderMarkdown(message.content || ''),
-                      }}
-                    />
-                    {message.sources && message.sources.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-neutral-700/50 text-xs">
-                        <p className="font-semibold mb-2 flex items-center gap-1.5 text-neutral-200">
-                          <svg
-                            className="w-3.5 h-3.5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                            />
-                          </svg>
-                          Sources ({message.sources.length})
-                        </p>
-                        <ul className="space-y-1.5 max-h-64 overflow-y-auto">
-                          {message.sources.map((source, i) => (
-                            <li
-                              key={i}
-                              className={`flex items-start gap-2 ${
-                                message.role === 'user'
-                                  ? 'text-neutral-800'
-                                  : 'text-neutral-400'
-                              }`}
-                            >
-                              <span className="text-neutral-300 mt-0.5">{i + 1}.</span>
-                              <span className="text-sm">
-                                <span className="font-medium text-neutral-200">
-                                  {source.source_file || source.document_name || 'Unknown'}
-                                </span>
-                                <span className="opacity-75">
-                                  {' '}
-                                  (Page {source.page_idx || source.page || 'N/A'})
-                                </span>
-                                {source.score !== undefined && source.score !== null && (
-                                  <span className="ml-1.5 opacity-60">
-                                    – {(() => {
-                                      const score = Number(source.score);
-                                      // Normalize score to 0-100%
-                                      // If score is between 0-1, multiply by 100
-                                      // If score is negative or > 1, normalize using min-max from all sources
-                                      if (score >= 0 && score <= 1) {
-                                        return (score * 100).toFixed(1);
-                                      } else {
-                                        // For cross-encoder scores (can be negative), normalize relative to range
-                                        const scores = (message.sources || []).map(s => Number(s.score || 0));
-                                        const minScore = Math.min(...scores);
-                                        const maxScore = Math.max(...scores);
-                                        const normalized = ((score - minScore) / (maxScore - minScore)) * 100;
-                                        return normalized.toFixed(1);
-                                      }
-                                    })()}% match
-                                  </span>
-                                )}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    <p className="text-xs mt-2 opacity-60">
-                      {new Date(message.created_at).toLocaleTimeString('en-US', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {loading && (
-                <div className="flex justify-start">
-                  <div className="bg-neutral-900/80 text-neutral-200 px-5 py-4 rounded-2xl shadow-lg border border-neutral-800/50">
-                    <div className="flex items-center gap-3">
-                      <div className="flex gap-1">
-                        <div
-                          className="w-2 h-2 bg-neutral-300 rounded-full animate-bounce"
-                          style={{ animationDelay: '0ms' }}
-                        ></div>
-                        <div
-                          className="w-2 h-2 bg-neutral-300 rounded-full animate-bounce"
-                          style={{ animationDelay: '150ms' }}
-                        ></div>
-                        <div
-                          className="w-2 h-2 bg-neutral-300 rounded-full animate-bounce"
-                          style={{ animationDelay: '300ms' }}
-                        ></div>
-                      </div>
-                      <span className="text-sm text-neutral-400">
-                        Analyzing documents...
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
+                      <span>{lang.flag}</span>
+                      <span>{lang.label}</span>
+                      {selectedLanguage === lang.code && <span className="ml-auto text-primary">✓</span>}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Voice Input Component - Connected */}
+              <VoiceInput 
+                onTranscript={handleVoiceTranscript}
+                authToken={authToken}
+                language={selectedLanguage}
+              />
+
+              <Input
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Type your question or use voice input..."
+                className="flex-1 h-10 bg-chat-input-bg"
+              />
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={handleSend} disabled={!inputValue.trim()} className="h-10 px-4 gap-2">
+                    <Send className="h-4 w-4" />
+                    <span className="hidden sm:inline">Send</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Send Message</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="secondary" onClick={() => setCompareOpen(true)} className="h-10 px-4 gap-2">
+                    <GitCompare className="h-4 w-4" />
+                    <span className="hidden sm:inline">Compare</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Compare Topics</TooltipContent>
+              </Tooltip>
+              </TooltipProvider>
             </div>
-          </div>
 
-          {/* Input Area - WITH FILTER */}
-          <div className="border-t border-neutral-800/50 p-6 bg-gradient-to-b from-black/80 to-black backdrop-blur-xl">
-            <div className="max-w-4xl mx-auto">
-              <form onSubmit={sendMessage} className="flex gap-3">
-                {/* Filter Dropdown */}
-                <FilterDropdown 
-                  onFilterChange={handleFilterChange}
-                  currentFilters={searchFilters}
-                />
-
-                {/* Voice Input Component */}
-                <VoiceInput 
-                  onTranscript={handleVoiceTranscript}
-                  authToken={authToken}
-                />
-
-                {/* Text Input */}
-                <input
-                  type="text"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  disabled={!currentConversation || loading}
-                  placeholder={
-                    currentConversation
-                      ? 'Type your question or use voice input...'
-                      : 'Please create or select a conversation first'
-                  }
-                  className="flex-1 px-4 py-3 bg-neutral-900/80 border border-neutral-800/60 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-300/60 focus:border-neutral-300/60 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg"
-                />
-
-                {/* Send Button */}
-                <button
-                  type="submit"
-                  disabled={!inputValue.trim() || !currentConversation || loading}
-                  className="px-6 py-3 bg-gradient-to-r from-neutral-100 to-neutral-300 hover:from-neutral-200 hover:to-neutral-400 disabled:from-neutral-800 disabled:to-neutral-800 text-neutral-900 rounded-xl transition font-medium disabled:cursor-not-allowed shadow-lg shadow-neutral-300/30 hover:shadow-neutral-200/60 hover:scale-[1.02] active:scale-[0.98] disabled:shadow-none flex items-center gap-2"
-                  title="Send message"
-                >
-                  {loading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-neutral-700 border-t-neutral-100 rounded-full animate-spin"></div>
-                      <span className="hidden sm:inline">Sending</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                      </svg>
-                      <span className="hidden sm:inline">Send</span>
-                    </>
-                  )}
-                </button>
-
-                {/* Compare Button */}
-                <button
-                  type="button"
-                  onClick={() => setCompareOpen(true)}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-medium transition-all shadow-lg flex items-center gap-2"
-                  title="Compare topics or documents"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 3a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2h10zm-7 7h4m-4 4h4" />
-                  </svg>
-                  <span className="hidden sm:inline">Compare</span>
-                </button>
-                    {/* Compare Modal */}
-                    {compareOpen && (
-                      <CompareModal open={compareOpen} authToken={authToken} onClose={() => setCompareOpen(false)} />
-                    )}
-              </form>
-
-              {/* Language hint */}
-              <div className="flex items-center justify-between mt-3 text-xs text-neutral-500">
-                <p className="flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Hybrid search with filters • Voice input • English, Hindi, Tamil & more
-                </p>
-                <p className="hidden sm:block">Press Enter to send</p>
-              </div>
+            <div className="flex justify-center mt-3">
+              <p className="text-xs text-muted-foreground">
+                Hybrid search with filters • Voice input • English, Hindi, Tamil & more
+              </p>
             </div>
           </div>
         </div>
       </div>
+
+      {compareOpen && <CompareModal open={compareOpen} authToken={authToken} onClose={() => setCompareOpen(false)} />}
     </div>
   );
 }

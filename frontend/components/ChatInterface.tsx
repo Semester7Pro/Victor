@@ -456,7 +456,7 @@ const dockItems = [
     <div className="relative flex h-screen bg-background">
       <DockRoot
         items={dockItems}
-        className="bg-card/95 border-border shadow-2xl"
+        className="bg-sidebar-background/95 border-sidebar-border shadow-2xl"
         panelWidth={64}
         dockWidth={80}
         baseItemSize={48}
@@ -470,8 +470,8 @@ const dockItems = [
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-                    <span className="text-xl text-primary-foreground">🇮🇳</span>
+                  <div className="w-10 h-10 bg-gradient-to-br from-[hsl(var(--saffron))]/20 to-[hsl(var(--gov-green))]/20 rounded-xl flex items-center justify-center">
+                    <span className="text-xl">🇮🇳</span>
                   </div>
                   <div>
                     <h2 className="font-bold text-lg text-foreground">भारत RAG</h2>
@@ -510,8 +510,8 @@ const dockItems = [
                       className={cn(
                         "p-3 rounded-xl cursor-pointer transition-all group",
                         currentConversation === conv.conversation_id
-                          ? "bg-primary/10 border border-primary"
-                          : "bg-muted border border-border hover:border-primary/50"
+                          ? "bg-[hsl(var(--saffron))]/10 border border-[hsl(var(--saffron))]"
+                          : "bg-muted border border-border hover:border-[hsl(var(--saffron))]/50"
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -559,16 +559,12 @@ const dockItems = [
                 <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
               </div>
 
-              {/* <Button variant="outline" size="icon" onClick={() => setIsDarkMode(!isDarkMode)} className="h-9 w-9 rounded-full">
-                {isDarkMode ? <Sun className="h-4 w-4 text-primary" /> : <Moon className="h-4 w-4 text-secondary" />}
-              </Button> */}
               <ThemeToggle />
 
-
               <div className="flex items-center gap-2">
-                <Avatar className="h-9 w-9 border-2 border-primary">
+                <Avatar className="h-9 w-9 border-2 border-[hsl(var(--saffron))]">
                   <AvatarImage src={userAvatar} alt={userName} />
-                  <AvatarFallback className="bg-primary text-primary-foreground font-medium">
+                  <AvatarFallback className="bg-[hsl(var(--saffron))] text-primary-foreground font-medium">
                     {userName.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
@@ -587,7 +583,7 @@ const dockItems = [
             <div className="max-w-3xl mx-auto space-y-6">
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full py-20 text-center">
-                  <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[hsl(var(--saffron))]/20 to-[hsl(var(--gov-green))]/20 flex items-center justify-center mb-4">
                     <span className="text-4xl">🇮🇳</span>
                   </div>
                   <h2 className="text-xl font-semibold text-foreground mb-2">Welcome to भारत RAG Portal</h2>
@@ -596,7 +592,10 @@ const dockItems = [
                   </p>
                   <div className="flex gap-2 mt-6 flex-wrap justify-center">
                     {["NEP 2020", "RTI Act", "Digital India", "Ayushman Bharat"].map((tag) => (
-                      <span key={tag} className="px-3 py-1.5 rounded-full text-sm bg-primary/10 text-primary border border-primary/20 cursor-pointer hover:bg-primary/20 transition-colors">
+                      <span 
+                        key={tag} 
+                        className="px-3 py-1.5 rounded-full text-sm bg-[hsl(var(--saffron))]/10 text-[hsl(var(--saffron))] border border-[hsl(var(--saffron))]/20 cursor-pointer hover:bg-[hsl(var(--saffron))]/20 transition-colors"
+                      >
                         {tag}
                       </span>
                     ))}
@@ -605,12 +604,31 @@ const dockItems = [
               ) : (
                 messages.map((message) => (
                   <div key={message.message_id} className={cn("flex gap-3 animate-fade-in", message.role === 'user' ? "flex-row-reverse" : "flex-row")}>
-                    <div className={cn("flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center", message.role === 'user' ? "bg-primary" : "bg-secondary")}>
-                      {message.role === 'user' ? <User className="h-4 w-4 text-primary-foreground" /> : <Bot className="h-4 w-4 text-secondary-foreground" />}
+                    <div className={cn(
+                      "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center", 
+                      message.role === 'user' 
+                        ? "bg-[hsl(var(--chat-user))]" 
+                        : "bg-secondary"
+                    )}>
+                      {message.role === 'user' ? (
+                        <User className="h-4 w-4 text-primary-foreground" />
+                      ) : (
+                        <Bot className="h-4 w-4 text-secondary-foreground" />
+                      )}
                     </div>
-                    <div className={cn("max-w-[70%] rounded-2xl px-4 py-3 shadow-sm", message.role === 'user' ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-chat-assistant text-foreground rounded-bl-sm")}>
+                    <div className={cn(
+                      "max-w-[70%] rounded-2xl px-4 py-3 shadow-sm", 
+                      message.role === 'user' 
+                        ? "bg-[hsl(var(--chat-user))] text-primary-foreground rounded-br-sm" 
+                        : "bg-[hsl(var(--chat-assistant))] text-foreground rounded-bl-sm"
+                    )}>
                       <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
-                      <p className={cn("text-xs mt-2", message.role === 'user' ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                      <p className={cn(
+                        "text-xs mt-2", 
+                        message.role === 'user' 
+                          ? "text-primary-foreground/70" 
+                          : "text-muted-foreground"
+                      )}>
                         {new Date(message.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
@@ -629,14 +647,12 @@ const dockItems = [
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Filter Dropdown - Connected Component */}
               <FilterDropdown 
                 onFilterChange={handleFilterChange}
                 currentFilters={searchFilters}
               />
               <TooltipProvider>
               <DropdownMenu>
-                
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
@@ -652,17 +668,21 @@ const dockItems = [
                     <DropdownMenuItem
                       key={lang.code}
                       onClick={() => setSelectedLanguage(lang.code)}
-                      className={cn("flex items-center gap-2 cursor-pointer", selectedLanguage === lang.code && "bg-primary/10")}
+                      className={cn(
+                        "flex items-center gap-2 cursor-pointer", 
+                        selectedLanguage === lang.code && "bg-[hsl(var(--saffron))]/10"
+                      )}
                     >
                       <span>{lang.flag}</span>
                       <span>{lang.label}</span>
-                      {selectedLanguage === lang.code && <span className="ml-auto text-primary">✓</span>}
+                      {selectedLanguage === lang.code && (
+                        <span className="ml-auto text-[hsl(var(--saffron))]">✓</span>
+                      )}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Voice Input Component - Connected */}
               <VoiceInput 
                 onTranscript={handleVoiceTranscript}
                 authToken={authToken}
@@ -674,7 +694,7 @@ const dockItems = [
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Type your question or use voice input..."
-                className="flex-1 h-10 bg-chat-input-bg"
+                className="flex-1 h-10 bg-[hsl(var(--chat-input-bg))]"
               />
 
               <Tooltip>
@@ -707,7 +727,7 @@ const dockItems = [
           </div>
         </div>
       </div>
-
+      
       {compareOpen && <CompareModal open={compareOpen} authToken={authToken} onClose={() => setCompareOpen(false)} />}
     </div>
   );

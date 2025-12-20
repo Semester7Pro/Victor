@@ -5,6 +5,7 @@ import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useTheme } from "@/lib/ThemeContext";
 import { PolicyAssistDrafter } from "@/components/PolicyAssistDrafter";
+import { useAuth } from "@clerk/nextjs";
 
 
 interface SearchResult {
@@ -29,7 +30,7 @@ interface RAGResponse {
 
 export default function PolicyDrafterPage() {
   const { theme } = useTheme();
-
+  const { getToken } = useAuth();
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<RAGResponse | null>(null);
@@ -49,10 +50,12 @@ export default function PolicyDrafterPage() {
     console.log("Searching for:", query);
 
     try {
+      const token = await getToken(); 
       const response = await fetch("http://localhost:8000/ask", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           query: query,

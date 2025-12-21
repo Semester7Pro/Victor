@@ -1,6 +1,7 @@
 import sys
 import os
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 # Add the backend directory to Python path
 backend_dir = Path(__file__).parent.parent
@@ -202,6 +203,7 @@ class SearchResult(BaseModel):
     document_type: Optional[str] = None
     ministry: Optional[str] = None
     source_reference: Optional[str] = None
+    bbox: Optional[List[float]] = None
 
 class SearchResponse(BaseModel):
     query: str
@@ -455,11 +457,17 @@ async def ask(request: RAGRequest, user: dict = Depends(verify_auth_token)):
             try:
                 # Use document_id directly as the source name
                 source_name = source.get('document_id', '')
+
+                page_idx_value = source.get('page_idx') or source.get('page') or 0
+        
+                logger.debug(f"Source formatting - document_id: {source.get('document_id')}, page_idx: {page_idx_value}")
+        
                 
                 formatted_sources.append(SearchResult(
                     text=source.get("text", ""),
                     source=source.get("source", ""),
-                    page=source.get("page", 0),
+                    # page=source.get("page", 0),
+                    # page_idx=source.get("page_idx", 0),
                     score=source.get("score", 0.0),
                     document_id=source.get("document_id"),
                     chunk_id=source.get("chunk_id"),
@@ -470,8 +478,13 @@ async def ask(request: RAGRequest, user: dict = Depends(verify_auth_token)):
                     char_count=source.get("char_count"),
                     word_count=source.get("word_count"),
                     # Use document_id directly as the name
+                    # source_file=source_name,
+                    # page_idx=source.get('page_idx') or source.get('page', 0),
                     source_file=source_name,
-                    page_idx=source.get('page_idx') or source.get('page', 0),
+            # ✅ CRITICAL: Include both page_idx AND page for compatibility
+                    page_idx=page_idx_value,
+                    page=page_idx_value,  # Include both fields
+                    bbox=source.get("bbox"),
                     document_name=source_name
                 ))
             except Exception as e:
@@ -981,14 +994,15 @@ async def root():
         )
 
  # PDF serving endpoint
-@app.get("/pdf/{filename}")
+@app.get("/pdf/{filename:path}")
 async def serve_pdf(filename: str):
     """Serve PDF files from the data directory"""
     try:
+        safe_name = unquote(filename)
         # Get the project root directory (parent of api folder)
         api_dir = Path(__file__).parent
         project_root = api_dir.parent
-        pdf_path = project_root / "data" / filename
+        pdf_path = project_root / "data" / safe_name
         
         # Security check: ensure the file is in the data directory
         if not pdf_path.is_file() or not pdf_path.resolve().is_relative_to(project_root / "data"):
@@ -1000,7 +1014,7 @@ async def serve_pdf(filename: str):
         return FileResponse(
             path=str(pdf_path),
             media_type="application/pdf",
-            filename=filename
+            filename=safe_name
         )
     except HTTPException:
         raise

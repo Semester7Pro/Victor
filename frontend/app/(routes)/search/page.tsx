@@ -10,6 +10,8 @@ import OrbitalLoader from "@/components/ui/OrbitalLoader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search as SearchIcon, ArrowLeft, FileText, Database, Brain, Sparkles } from "lucide-react";
+import { PDFViewer } from "@/components/PDFviewer";
+
 
 interface SearchResult {
   text: string;
@@ -22,6 +24,7 @@ interface SearchResult {
   section_hierarchy?: string;
   char_count?: number;
   word_count?: number;
+   bbox?: number[];
 }
 
 interface RAGResponse {
@@ -114,6 +117,8 @@ export default function PolicyDrafterPage() {
           console.log(`[Chunk ${idx + 1}] ${source.text.substring(0, 150)}...`);
         });
       }
+
+      
 
       if (data.answer) {
         setResults(data);
@@ -391,6 +396,7 @@ export default function PolicyDrafterPage() {
                   </div>
                 </div>
 
+                  
                 {/* Sources Section */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
@@ -418,84 +424,71 @@ export default function PolicyDrafterPage() {
                   </div>
 
                   <div className="space-y-3">
-                    {results.sources?.map((source, index) => (
-                      <div
-                        key={index}
-                        className="border rounded-lg p-4 transition-all cursor-pointer group"
-                        style={{
-                          backgroundColor: 'hsl(var(--card))',
-                          borderColor: 'hsl(var(--border))',
-                          animationDelay: `${index * 100}ms`
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = 'hsl(var(--primary) / 0.5)';
-                          e.currentTarget.style.boxShadow = '0 1px 3px 0 rgba(0, 0, 0, 0.1)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = 'hsl(var(--border))';
-                          e.currentTarget.style.boxShadow = 'none';
-                        }}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div 
-                            className="flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center"
-                            style={{ backgroundColor: 'hsl(var(--primary) / 0.1)' }}
-                          >
-                            <FileText 
-                              className="w-4 h-4"
-                              style={{ color: 'hsl(var(--primary))' }}
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              <h4 
-                                className="font-medium text-sm truncate transition-colors"
-                                style={{ color: 'hsl(var(--foreground))' }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.color = 'hsl(var(--primary))';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.color = 'hsl(var(--foreground))';
-                                }}
-                              >
-                                {source.source_file}
-                              </h4>
-                              <span 
-                                className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium"
-                                style={{
-                                  backgroundColor: 'hsl(var(--accent) / 0.1)',
-                                  color: 'hsl(var(--accent))'
-                                }}
-                              >
-                                {Math.round(source.score * 100)}%
-                              </span>
+                    {results.sources?.map((source, index) => {
+                      const displayFile = source.source_file || "Unknown";
+                      const pageNum = source.page_idx ?? source.page ?? 1;
+                      const scorePct = source.score ? Math.round(source.score * 100) : undefined;
+
+                      return (
+                        <div
+                          key={index}
+                          className="border rounded-lg p-4 transition-all cursor-pointer group"
+                          style={{
+                            backgroundColor: 'hsl(var(--card))',
+                            borderColor: 'hsl(var(--border))',
+                            animationDelay: `${index * 100}ms`
+                          }}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className="flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center"
+                              style={{ backgroundColor: 'hsl(var(--primary) / 0.1)' }}
+                            >
+                              <FileText className="w-4 h-4" style={{ color: 'hsl(var(--primary))' }} />
                             </div>
-                            <p 
-                              className="text-xs line-clamp-2 mb-2"
-                              style={{ color: 'hsl(var(--muted-foreground))' }}
-                            >
-                              {source.text}
-                            </p>
-                            <div 
-                              className="flex items-center gap-3 text-[10px]"
-                              style={{ color: 'hsl(var(--muted-foreground))' }}
-                            >
-                              <span className="flex items-center gap-1">
-                                <FileText className="w-2.5 h-2.5" />
-                                Page {source.page_idx}
-                              </span>
-                              <button
-                                onClick={() => setSelectedSourceIndex(index)}
-                                className="underline hover:no-underline"
-                                style={{ color: 'hsl(var(--primary))' }}
-                              >
-                                View Details
-                              </button>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h4
+                                  className="font-medium text-sm truncate transition-colors"
+                                  style={{ color: 'hsl(var(--foreground))' }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.color = 'hsl(var(--primary))')}
+                                  onMouseLeave={(e) => (e.currentTarget.style.color = 'hsl(var(--foreground))')}
+                                >
+                                  {displayFile}
+                                </h4>
+                                {scorePct !== undefined && (
+                                  <span
+                                    className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                    style={{ backgroundColor: 'hsl(var(--accent) / 0.1)', color: 'hsl(var(--accent))' }}
+                                  >
+                                    {scorePct}%
+                                  </span>
+                                )}
+                              </div>
+
+                              <p className="text-xs line-clamp-2 mb-2" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                                {source.text}
+                              </p>
+
+                              <div className="flex items-center gap-3 text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                                <span className="flex items-center gap-1">
+                                  <FileText className="w-2.5 h-2.5" />
+                                  Page {pageNum}
+                                </span>
+                                <button
+                                  onClick={() => setSelectedSourceIndex(index)}
+                                  
+                                  className="underline hover:no-underline"
+                                  style={{ color: 'hsl(var(--primary))' }}
+                                >
+                                  View Details
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -505,104 +498,108 @@ export default function PolicyDrafterPage() {
       </main>
 
       {/* PDF Viewer Modal */}
-      {selectedSourceIndex !== null && results && results.sources[selectedSourceIndex] && (
-        <div 
-          className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          style={{ backgroundColor: 'hsl(var(--background) / 0.8)' }}
-        >
-          <div 
-            className="rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col border shadow-2xl"
-            style={{
-              backgroundColor: 'hsl(var(--card))',
-              borderColor: 'hsl(var(--border))'
-            }}
-          >
-            <div 
-              className="flex items-center justify-between p-6 border-b"
-              style={{ borderColor: 'hsl(var(--border))' }}
-            >
-              <div className="flex-1">
-                <h2 
-                  className="text-xl font-bold mb-1"
-                  style={{ color: 'hsl(var(--foreground))' }}
-                >
-                  {results.sources[selectedSourceIndex].source_file}
-                </h2>
-                <p 
-                  className="text-sm"
-                  style={{ color: 'hsl(var(--muted-foreground))' }}
-                >
-                  📄 Page {results.sources[selectedSourceIndex].page_idx} • 
-                  Relevance: {(results.sources[selectedSourceIndex].score * 100).toFixed(1)}%
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedSourceIndex(null)}
-                className="text-2xl transition-colors"
-                style={{ color: 'hsl(var(--muted-foreground))' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = 'hsl(var(--foreground))';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = 'hsl(var(--muted-foreground))';
-                }}
-              >
-                ✕
-              </button>
-            </div>
+      {/* // In your modal section, update the page number calculation: */}
 
-            <div className="flex-1 overflow-y-auto p-6">
-              <div 
-                className="rounded p-4 border"
-                style={{
-                  backgroundColor: 'hsl(var(--muted))',
-                  borderColor: 'hsl(var(--border))'
-                }}
-              >
-                <h3 
-                  className="text-sm font-semibold uppercase tracking-wide mb-3"
-                  style={{ color: 'hsl(var(--muted-foreground))' }}
-                >
-                  Referenced Text
-                </h3>
-                <div 
-                  className="border-l-4 p-4 rounded leading-relaxed text-sm whitespace-pre-wrap font-mono"
-                  style={{
-                    backgroundColor: 'hsl(var(--card))',
-                    borderColor: 'hsl(var(--primary))',
-                    color: 'hsl(var(--foreground))'
-                  }}
-                >
-                  {results.sources[selectedSourceIndex].text}
+{selectedSourceIndex !== null && results && results.sources[selectedSourceIndex] && (
+  (() => {
+    const s = results.sources[selectedSourceIndex];
+    const fileField = s.source_file || s.document_id || "";
+    
+    // ✅ FIX: Backend stores 0-indexed pages, PDF.js needs 1-indexed
+    // If page_idx = 0 → PDF page 1
+    // If page_idx = 1 → PDF page 2
+    // If page_idx = 2 → PDF page 3
+    const pageIdxRaw = s.page_idx ?? s.page ?? 0;
+    const pageNum = pageIdxRaw + 1; // Convert 0-indexed to 1-indexed
+    
+    console.log("=".repeat(80));
+    console.log("📋 PAGE NUMBER CONVERSION:");
+    console.log(`  Backend page_idx (0-indexed): ${pageIdxRaw}`);
+    console.log(`  PDF.js page (1-indexed): ${pageNum}`);
+    console.log("=".repeat(80));
+
+    // Extract relative path for PDF URL
+    let relativePath: string | undefined;
+    const m = (fileField || "").match(/data[\\/](.*)$/i);
+    if (m && m[1]) {
+      relativePath = m[1];
+    } else if (fileField && (fileField.includes("/") || fileField.includes("\\"))) {
+      relativePath = fileField.split(/[\\/]/).pop();
+    } else if (s.document_id) {
+      relativePath = `uploads/${s.document_id}/v1/original.pdf`;
+    } else if (fileField) {
+      relativePath = fileField;
+    }
+    
+    const backendPdfUrl = relativePath 
+      ? `http://localhost:8000/pdf/${encodeURIComponent(relativePath)}` 
+      : undefined;
+
+    return (
+      <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4" 
+           style={{ backgroundColor: 'hsl(var(--background) / 0.8)' }}>
+        <div className="rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col border shadow-2xl" 
+             style={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}>
+          
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b" 
+               style={{ borderColor: 'hsl(var(--border))' }}>
+            <div className="flex-1">
+              <h2 className="text-xl font-bold mb-1" 
+                  style={{ color: 'hsl(var(--foreground))' }}>
+                {fileField || s.document_id || "Document"}
+              </h2>
+              <p className="text-sm" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                📄 Page {pageNum} • Relevance: {(s.score ? (s.score * 100).toFixed(1) : "N/A")}%
+              </p>
+            </div>
+            <button 
+              onClick={() => setSelectedSourceIndex(null)} 
+              className="text-2xl hover:opacity-70 transition-opacity" 
+              style={{ color: 'hsl(var(--muted-foreground))' }}>
+              ✕
+            </button>
+          </div>
+
+          {/* PDF Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {backendPdfUrl ? (
+              <PDFViewer 
+                fileUrl={backendPdfUrl} 
+                page={pageNum}  // ✅ Now passing correct 1-indexed page
+                highlightText={s.text} 
+              />
+            ) : (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+                <p className="text-sm text-yellow-800 mb-2">
+                  ⚠️ PDF preview not available
+                </p>
+                <div className="p-4 bg-white border rounded">
+                  <p className="text-xs font-semibold mb-2 text-gray-700">Referenced Text:</p>
+                  <p className="text-sm text-gray-800">{s.text}</p>
                 </div>
               </div>
-            </div>
+            )}
+          </div>
 
-            <div 
-              className="border-t p-4 flex gap-3 justify-end"
-              style={{ borderColor: 'hsl(var(--border))' }}
-            >
-              <button
-                onClick={() => setSelectedSourceIndex(null)}
-                className="px-4 py-2 rounded transition-colors font-medium"
-                style={{
-                  backgroundColor: 'hsl(var(--primary))',
-                  color: 'hsl(var(--primary-foreground))'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.9)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'hsl(var(--primary))';
-                }}
-              >
-                Close
-              </button>
-            </div>
+          {/* Footer */}
+          <div className="border-t p-4 flex gap-3 justify-end" 
+               style={{ borderColor: 'hsl(var(--border))' }}>
+            <button 
+              onClick={() => setSelectedSourceIndex(null)} 
+              className="px-4 py-2 rounded hover:opacity-90 transition-opacity" 
+              style={{ 
+                backgroundColor: 'hsl(var(--primary))', 
+                color: 'hsl(var(--primary-foreground))' 
+              }}>
+              Close
+            </button>
           </div>
         </div>
-      )}
-
+      </div>
+    );
+  })()
+)}
       {/* Footer */}
       <footer 
         className="border-t py-3"

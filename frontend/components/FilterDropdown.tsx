@@ -93,16 +93,39 @@ export default function FilterDropdown({ onFilterChange, currentFilters }: Filte
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className={`p-3 rounded-lg transition-all flex items-center gap-2 ${
-          hasActiveFilters
-            ? "bg-primary/20 border border-primary/50 text-primary"
-            : "bg-muted border border-border text-foreground hover:bg-muted/80"
-        }`}
+        className="p-3 rounded-lg transition-colors flex items-center gap-2 border"
+        style={{
+          backgroundColor: hasActiveFilters 
+            ? 'hsl(var(--primary) / 0.1)' 
+            : 'hsl(var(--card))',
+          borderColor: hasActiveFilters 
+            ? 'hsl(var(--primary))' 
+            : 'hsl(var(--border))',
+          color: hasActiveFilters 
+            ? 'hsl(var(--primary))' 
+            : 'hsl(var(--foreground))'
+        }}
+        onMouseEnter={(e) => {
+          if (!hasActiveFilters) {
+            e.currentTarget.style.backgroundColor = 'hsl(var(--muted))';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!hasActiveFilters) {
+            e.currentTarget.style.backgroundColor = 'hsl(var(--card))';
+          }
+        }}
         title="Filter documents"
       >
         <Filter className="w-5 h-5" />
         {hasActiveFilters && (
-          <span className="text-xs font-semibold bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center">
+          <span 
+            className="text-xs font-semibold rounded-full w-5 h-5 flex items-center justify-center"
+            style={{
+              backgroundColor: 'hsl(var(--primary))',
+              color: 'hsl(var(--primary-foreground))'
+            }}
+          >
             {Object.values(filters).filter(v => v && v.trim() !== "").length}
           </span>
         )}
@@ -110,26 +133,69 @@ export default function FilterDropdown({ onFilterChange, currentFilters }: Filte
 
       {/* Filter Dialog */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-md bg-card border-border">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-foreground">
-              <Filter className="h-5 w-5 text-primary" />
-              Filter Documents
+        <DialogContent 
+          className="sm:max-w-md border"
+          style={{
+            backgroundColor: 'hsl(var(--card))',
+            borderColor: 'hsl(var(--border))'
+          }}
+        >
+          <DialogHeader 
+            className="border-b pb-4"
+            style={{ borderColor: 'hsl(var(--border))' }}
+          >
+            <DialogTitle 
+              className="flex items-center gap-3"
+              style={{ color: 'hsl(var(--foreground))' }}
+            >
+              <div 
+                className="p-2 rounded-lg"
+                style={{ backgroundColor: 'hsl(var(--primary))' }}
+              >
+                <Filter 
+                  className="h-5 w-5"
+                  style={{ color: 'hsl(var(--primary-foreground))' }}
+                />
+              </div>
+              <span className="font-semibold text-lg">Filter Documents</span>
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-5 py-4 max-h-[60vh] overflow-y-auto">
             {/* Category Filter */}
             <div className="space-y-2">
-              <Label className="text-foreground">Category</Label>
+              <Label 
+                className="font-medium text-sm"
+                style={{ color: 'hsl(var(--foreground))' }}
+              >
+                Category
+              </Label>
               <Select 
                 value={filters.category || "all"} 
                 onValueChange={(value) => handleFilterChange("category", value === "all" ? "" : value)}
               >
-                <SelectTrigger className="bg-muted border-border">
+                <SelectTrigger 
+                  className="border transition-colors h-11"
+                  style={{
+                    backgroundColor: 'hsl(var(--muted))',
+                    borderColor: 'hsl(var(--primary))'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'hsl(var(--primary) / 0.8)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'hsl(var(--primary))';
+                  }}
+                >
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent 
+                  className="border"
+                  style={{
+                    backgroundColor: 'hsl(var(--card))',
+                    borderColor: 'hsl(var(--border))'
+                  }}
+                >
                   <SelectItem value="all">All Categories</SelectItem>
                   {CATEGORIES.map((cat) => (
                     <SelectItem key={cat} value={cat}>
@@ -142,15 +208,44 @@ export default function FilterDropdown({ onFilterChange, currentFilters }: Filte
 
             {/* Language Filter */}
             <div className="space-y-2">
-              <Label className="text-foreground">Language</Label>
+              <Label 
+                className="font-medium text-sm"
+                style={{ color: 'hsl(var(--foreground))' }}
+              >
+                Language
+              </Label>
               <Select 
                 value={filters.language || "all"} 
                 onValueChange={(value) => handleFilterChange("language", value === "all" ? "" : value)}
               >
-                <SelectTrigger className="bg-muted border-border">
+                <SelectTrigger 
+                  className="border transition-colors h-11"
+                  style={{
+                    backgroundColor: 'hsl(var(--muted))',
+                    borderColor: 'hsl(var(--border))'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'hsl(var(--primary) / 0.6)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = 'hsl(var(--primary))';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                  }}
+                >
                   <SelectValue placeholder="All Languages" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent 
+                  className="border"
+                  style={{
+                    backgroundColor: 'hsl(var(--card))',
+                    borderColor: 'hsl(var(--border))'
+                  }}
+                >
                   <SelectItem value="all">All Languages</SelectItem>
                   {LANGUAGES.map((lang) => (
                     <SelectItem key={lang} value={lang}>
@@ -163,68 +258,170 @@ export default function FilterDropdown({ onFilterChange, currentFilters }: Filte
 
             {/* Document Type Filter */}
             <div className="space-y-2">
-              <Label className="text-foreground">Document Type</Label>
-              <Select 
-                value={filters.document_type || "all"} 
-                onValueChange={(value) => handleFilterChange("document_type", value === "all" ? "" : value)}
+              <Label 
+                className="font-medium text-sm"
+                style={{ color: 'hsl(var(--foreground))' }}
               >
-                <SelectTrigger className="bg-muted border-border">
-                  <SelectValue placeholder="All Types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  {DOCUMENT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type.toUpperCase()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                Document Type
+              </Label>
+              <div className="relative">
+                <Select 
+                  value={filters.document_type || "all"} 
+                  onValueChange={(value) => handleFilterChange("document_type", value === "all" ? "" : value)}
+                >
+                  <SelectTrigger 
+                    className="border transition-colors h-11"
+                    style={{
+                      backgroundColor: 'hsl(var(--muted))',
+                      borderColor: 'hsl(var(--border))'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'hsl(var(--primary) / 0.6)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = 'hsl(var(--primary))';
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                    }}
+                  >
+                    <SelectValue placeholder="All Types" />
+                  </SelectTrigger>
+                  <SelectContent 
+                    className="border"
+                    style={{
+                      backgroundColor: 'hsl(var(--card))',
+                      borderColor: 'hsl(var(--border))'
+                    }}
+                  >
+                    <SelectItem value="all">All Types</SelectItem>
+                    {DOCUMENT_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type.toUpperCase()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Document ID Search */}
             <div className="space-y-2">
-              <Label className="text-foreground">Document ID (contains)</Label>
+              <Label 
+                className="font-medium text-sm"
+                style={{ color: 'hsl(var(--foreground))' }}
+              >
+                Document ID (contains)
+              </Label>
               <Input
                 value={filters.document_id || ""}
                 onChange={(e) => handleFilterChange("document_id", e.target.value)}
                 placeholder="e.g., RTEAct, NEP2020, RUSA"
-                className="bg-muted border-border"
+                className="border transition-colors h-11"
+                style={{
+                  backgroundColor: 'hsl(var(--muted))',
+                  borderColor: 'hsl(var(--border))'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'hsl(var(--primary) / 0.6)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'hsl(var(--primary))';
+                  e.currentTarget.style.boxShadow = '0 0 0 3px hsl(var(--ring) / 0.2)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               />
             </div>
 
             {/* Date Range Filter */}
             <div className="space-y-2">
-              <Label className="text-foreground flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
+              <Label 
+                className="font-medium text-sm flex items-center gap-2"
+                style={{ color: 'hsl(var(--foreground))' }}
+              >
+                <Calendar 
+                  className="h-4 w-4"
+                  style={{ color: 'hsl(var(--muted-foreground))' }}
+                />
                 Published Date Range
               </Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Input
                     type="date"
                     value={filters.date_from || ""}
                     onChange={(e) => handleFilterChange("date_from", e.target.value)}
-                    className="bg-muted border-border"
+                    className="border transition-colors h-11"
+                    style={{
+                      backgroundColor: 'hsl(var(--muted))',
+                      borderColor: 'hsl(var(--border))'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'hsl(var(--primary) / 0.6)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = 'hsl(var(--primary))';
+                      e.currentTarget.style.boxShadow = '0 0 0 3px hsl(var(--ring) / 0.2)';
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">From</p>
                 </div>
                 <div>
                   <Input
                     type="date"
                     value={filters.date_to || ""}
                     onChange={(e) => handleFilterChange("date_to", e.target.value)}
-                    className="bg-muted border-border"
+                    className="border transition-colors h-11"
+                    style={{
+                      backgroundColor: 'hsl(var(--muted))',
+                      borderColor: 'hsl(var(--border))'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'hsl(var(--primary) / 0.6)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = 'hsl(var(--primary))';
+                      e.currentTarget.style.boxShadow = '0 0 0 3px hsl(var(--ring) / 0.2)';
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">To</p>
                 </div>
               </div>
             </div>
 
             {/* Active Filters */}
             {hasActiveFilters && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">Active Filters:</p>
+              <div 
+                className="space-y-2 pt-2 border-t"
+                style={{ borderColor: 'hsl(var(--border))' }}
+              >
+                <p 
+                  className="text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: 'hsl(var(--muted-foreground))' }}
+                >
+                  Active Filters:
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(filters).map(([key, value]) => {
                     if (!value || value.trim() === "") return null;
@@ -233,11 +430,28 @@ export default function FilterDropdown({ onFilterChange, currentFilters }: Filte
                         key={key}
                         type="button"
                         onClick={() => clearSingleFilter(key as keyof SearchFilters)}
-                        className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary rounded-md text-xs flex items-center gap-1 hover:bg-primary/30 transition"
+                        className="px-3 py-1.5 border rounded-lg text-xs flex items-center gap-2 transition-colors"
+                        style={{
+                          backgroundColor: 'hsl(var(--primary) / 0.1)',
+                          borderColor: 'hsl(var(--primary) / 0.3)',
+                          color: 'hsl(var(--primary))'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.2)';
+                          e.currentTarget.style.borderColor = 'hsl(var(--primary) / 0.5)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.1)';
+                          e.currentTarget.style.borderColor = 'hsl(var(--primary) / 0.3)';
+                        }}
                       >
-                        <span className="font-medium">{key}:</span>
-                        <span>{value.length > 20 ? value.substring(0, 20) + "..." : value}</span>
-                        <X className="w-3 h-3" />
+                        <span className="font-semibold">
+                          {key.replace(/_/g, " ")}:
+                        </span>
+                        <span className="font-medium">
+                          {value.length > 20 ? value.substring(0, 20) + "..." : value}
+                        </span>
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     );
                   })}
@@ -247,18 +461,21 @@ export default function FilterDropdown({ onFilterChange, currentFilters }: Filte
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div 
+            className="flex gap-3 pt-4 border-t"
+            style={{ borderColor: 'hsl(var(--border))' }}
+          >
             <Button
               variant="outline"
               onClick={clearFilters}
               disabled={!hasActiveFilters}
-              className="flex-1 border-border hover:bg-muted"
+              className="flex-1 h-11"
             >
               Clear All
             </Button>
             <Button
               onClick={applyFilters}
-              className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
+              className="flex-1 h-11"
             >
               Apply Filters
             </Button>

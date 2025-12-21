@@ -14,6 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import ThemeToggle from "@/components/ThemeToggle";
+import { useToast } from "@/hooks/use-toast";
 
 
 import {
@@ -90,7 +91,7 @@ export default function ChatInterface({ authToken, userName = 'User', userAvatar
   const [isRecording, setIsRecording] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-
+  const { toast } = useToast();
   const router = useRouter();
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -329,7 +330,7 @@ const dockItems = [
       // 1. Create new chat
       icon: (
         <svg
-          className="w-5 h-5 text-neutral-100"
+          className="w-5 h-5 "
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -344,12 +345,13 @@ const dockItems = [
       ),
       label: 'New chat',
       onClick: () => createNewChat(),
+      isActive: createNewChat,
     },
     {
       // 2. View chat history
       icon: (
         <svg
-          className="w-5 h-5 text-neutral-100"
+          className="w-5 h-5 "
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -364,12 +366,13 @@ const dockItems = [
       ),
       label: 'Chat history',
       onClick: () => setSidebarOpen((prev) => !prev),
+      isActive: sidebarOpen,
     },
     {
       // 3. Upload doc
       icon: (
         <svg
-          className="w-5 h-5 text-neutral-100"
+          className="w-5 h-5 "
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -389,7 +392,7 @@ const dockItems = [
       // 4. Search doc
       icon: (
         <svg
-          className="w-5 h-5 text-neutral-100"
+          className="w-5 h-5"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -409,7 +412,7 @@ const dockItems = [
       // 5. Back to landing page
       icon: (
         <svg
-          className="w-5 h-5 text-neutral-100"
+          className="w-5 h-5 "
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -541,192 +544,393 @@ const dockItems = [
           </div>
         )}
 
-        <div className="flex-1 flex flex-col bg-background">
-          <header className="flex items-center justify-between px-4 py-3 bg-card border-b border-border">
-            <div className="flex items-center gap-3">
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">{currentTitle || 'New Conversation'}</h1>
-                <p className="text-sm text-muted-foreground">
-                  {messages.length > 0 ? `${messages.length} message${messages.length !== 1 ? 's' : ''}` : 'Ask anything about your documents'}
-                </p>
-              </div>
-            </div>
+<div className="flex-1 flex flex-col" style={{ backgroundColor: 'hsl(var(--background))' }}>
+  <header 
+    className="flex items-center justify-between px-4 py-3 border-b"
+    style={{
+      backgroundColor: 'hsl(var(--card))',
+      borderColor: 'hsl(var(--border))'
+    }}
+  >
+    {/* Left section */}
+    <div className="flex items-center gap-3">
+      <div>
+        <h1 
+          className="text-lg font-semibold"
+          style={{ color: 'hsl(var(--foreground))' }}
+        >
+          {currentTitle || 'New Conversation'}
+        </h1>
+        <p 
+          className="text-sm"
+          style={{ color: 'hsl(var(--muted-foreground))' }}
+        >
+          {messages.length > 0 ? `${messages.length} message${messages.length !== 1 ? 's' : ''}` : 'Ask anything about your documents'}
+        </p>
+      </div>
+    </div>
 
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 text-accent">
-                <Wifi className="h-4 w-4" />
-                <span className="text-sm font-medium">LangChain RAG</span>
-                <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-              </div>
+    {/* Right section */}
+    <div className="flex items-center gap-4">
+      {/* Status indicator */}
+      <div 
+        className="flex items-center gap-2 px-3 py-1.5 rounded-full"
+        style={{
+          backgroundColor: 'hsl(var(--accent) / 0.1)',
+          color: 'hsl(var(--accent))'
+        }}
+      >
+        <Wifi className="h-4 w-4" />
+        <span className="text-sm font-medium">LangChain RAG</span>
+        <span 
+          className="w-2 h-2 rounded-full animate-pulse"
+          style={{ backgroundColor: 'hsl(var(--accent))' }}
+        />
+      </div>
 
-              <ThemeToggle />
+      {/* Theme toggle */}
+      <ThemeToggle />
 
-              <div className="flex items-center gap-2">
-                <Avatar className="h-9 w-9 border-2 border-[hsl(var(--saffron))]">
-                  <AvatarImage src={userAvatar} alt={userName} />
-                  <AvatarFallback className="bg-[hsl(var(--saffron))] text-primary-foreground font-medium">
-                    {userName.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="hidden sm:block">
-                  <p className="text-sm font-medium text-foreground">{userName}</p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-                    Online
-                  </p>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          <ScrollArea className="flex-1 px-4 py-6">
-            <div className="max-w-3xl mx-auto space-y-6">
-              {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full py-20 text-center">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[hsl(var(--saffron))]/20 to-[hsl(var(--gov-green))]/20 flex items-center justify-center mb-4">
-                    <span className="text-4xl">🇮🇳</span>
-                  </div>
-                  <h2 className="text-xl font-semibold text-foreground mb-2">Welcome to भारत RAG Portal</h2>
-                  <p className="text-muted-foreground max-w-md">
-                    Ask questions about government policies, acts, and documents. Use voice input or type in your preferred language.
-                  </p>
-                  <div className="flex gap-2 mt-6 flex-wrap justify-center">
-                    {["NEP 2020", "RTI Act", "Digital India", "Ayushman Bharat"].map((tag) => (
-                      <span 
-                        key={tag} 
-                        className="px-3 py-1.5 rounded-full text-sm bg-[hsl(var(--saffron))]/10 text-[hsl(var(--saffron))] border border-[hsl(var(--saffron))]/20 cursor-pointer hover:bg-[hsl(var(--saffron))]/20 transition-colors"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                messages.map((message) => (
-                  <div key={message.message_id} className={cn("flex gap-3 animate-fade-in", message.role === 'user' ? "flex-row-reverse" : "flex-row")}>
-                    <div className={cn(
-                      "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center", 
-                      message.role === 'user' 
-                        ? "bg-[hsl(var(--chat-user))]" 
-                        : "bg-secondary"
-                    )}>
-                      {message.role === 'user' ? (
-                        <User className="h-4 w-4 text-primary-foreground" />
-                      ) : (
-                        <Bot className="h-4 w-4 text-secondary-foreground" />
-                      )}
-                    </div>
-                    <div className={cn(
-                      "max-w-[70%] rounded-2xl px-4 py-3 shadow-sm", 
-                      message.role === 'user' 
-                        ? "bg-[hsl(var(--chat-user))] text-primary-foreground rounded-br-sm" 
-                        : "bg-[hsl(var(--chat-assistant))] text-foreground rounded-bl-sm"
-                    )}>
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
-                      <p className={cn(
-                        "text-xs mt-2", 
-                        message.role === 'user' 
-                          ? "text-primary-foreground/70" 
-                          : "text-muted-foreground"
-                      )}>
-                        {new Date(message.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-              <div ref={bottomRef} />
-            </div>
-          </ScrollArea>
-
-          <div className="bg-card border-t border-border p-4">
-            <div className="flex justify-center mb-3">
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                {currentLanguage.flag} {currentLanguage.label}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <FilterDropdown 
-                onFilterChange={handleFilterChange}
-                currentFilters={searchFilters}
-              />
-              <TooltipProvider>
-              <DropdownMenu>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" className="h-10 w-10 shrink-0">
-                        <Languages className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent>Select Language</TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent align="start" className="w-48">
-                  {languages.map((lang) => (
-                    <DropdownMenuItem
-                      key={lang.code}
-                      onClick={() => setSelectedLanguage(lang.code)}
-                      className={cn(
-                        "flex items-center gap-2 cursor-pointer", 
-                        selectedLanguage === lang.code && "bg-[hsl(var(--saffron))]/10"
-                      )}
-                    >
-                      <span>{lang.flag}</span>
-                      <span>{lang.label}</span>
-                      {selectedLanguage === lang.code && (
-                        <span className="ml-auto text-[hsl(var(--saffron))]">✓</span>
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <VoiceInput 
-                onTranscript={handleVoiceTranscript}
-                authToken={authToken}
-                language={selectedLanguage}
-              />
-
-              <Input
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type your question or use voice input..."
-                className="flex-1 h-10 bg-[hsl(var(--chat-input-bg))]"
-              />
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button onClick={handleSend} disabled={!inputValue.trim()} className="h-10 px-4 gap-2">
-                    <Send className="h-4 w-4" />
-                    <span className="hidden sm:inline">Send</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Send Message</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="secondary" onClick={() => setCompareOpen(true)} className="h-10 px-4 gap-2">
-                    <GitCompare className="h-4 w-4" />
-                    <span className="hidden sm:inline">Compare</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Compare Topics</TooltipContent>
-              </Tooltip>
-              </TooltipProvider>
-            </div>
-
-            <div className="flex justify-center mt-3">
-              <p className="text-xs text-muted-foreground">
-                Hybrid search with filters • Voice input • English, Hindi, Tamil & more
-              </p>
-            </div>
-          </div>
+      {/* User profile */}
+      <div className="flex items-center gap-2">
+        <Avatar 
+          className="h-9 w-9 border-2"
+          style={{ borderColor: 'hsl(var(--primary))' }}
+        >
+          <AvatarImage src={userAvatar} alt={userName} />
+          <AvatarFallback 
+            className="font-medium"
+            style={{
+              backgroundColor: 'hsl(var(--primary))',
+              color: 'hsl(var(--primary-foreground))'
+            }}
+          >
+            {userName.slice(0, 2).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <div className="hidden sm:block">
+          <p 
+            className="text-sm font-medium"
+            style={{ color: 'hsl(var(--foreground))' }}
+          >
+            {userName}
+          </p>
+          <p 
+            className="text-xs flex items-center gap-1"
+            style={{ color: 'hsl(var(--muted-foreground))' }}
+          >
+            <span 
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: 'hsl(var(--accent))' }}
+            />
+            Online
+          </p>
         </div>
       </div>
+    </div>
+  </header>
+
+<ScrollArea className="flex-1 px-4 py-6">
+  <div className="max-w-3xl mx-auto space-y-6">
+    {messages.length === 0 ? (
+      <div className="flex flex-col items-center justify-center h-full py-20 text-center">
+        <div 
+          className="w-20 h-20 rounded-full flex items-center justify-center mb-4"
+          style={{
+            background: `linear-gradient(to bottom right, hsl(var(--saffron) / 0.2), hsl(var(--gov-green) / 0.2))`
+          }}
+        >
+          <span className="text-4xl">🇮🇳</span>
+        </div>
+        <h2 
+          className="text-xl font-semibold mb-2"
+          style={{ color: 'hsl(var(--foreground))' }}
+        >
+          Welcome to भारत RAG Portal
+        </h2>
+        <p 
+          className="max-w-md"
+          style={{ color: 'hsl(var(--muted-foreground))' }}
+        >
+          Ask questions about government policies, acts, and documents. Use voice input or type in your preferred language.
+        </p>
+        <div className="flex gap-2 mt-6 flex-wrap justify-center">
+          {["NEP 2020", "RTI Act", "Digital India", "Ayushman Bharat"].map((tag) => (
+            <span 
+              key={tag} 
+              className="px-3 py-1.5 rounded-full text-sm border cursor-pointer transition-colors"
+              style={{
+                backgroundColor: 'hsl(var(--saffron) / 0.1)',
+                color: 'hsl(var(--saffron))',
+                borderColor: 'hsl(var(--saffron) / 0.2)'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(var(--saffron) / 0.2)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'hsl(var(--saffron) / 0.1)'}
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
+    ) : (
+      messages.map((message) => (
+        <div key={message.message_id} className={cn("flex gap-3 animate-fade-in", message.role === 'user' ? "flex-row-reverse" : "flex-row")}>
+          <div 
+            className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
+            style={{
+              backgroundColor: message.role === 'user' 
+                ? 'hsl(var(--chat-user))' 
+                : 'hsl(var(--secondary))'
+            }}
+          >
+            {message.role === 'user' ? (
+              <User 
+                className="h-4 w-4"
+                style={{ color: 'hsl(var(--primary-foreground))' }}
+              />
+            ) : (
+              <Bot 
+                className="h-4 w-4"
+                style={{ color: 'hsl(var(--secondary-foreground))' }}
+              />
+            )}
+          </div>
+          <div 
+            className={cn(
+              "max-w-[70%] rounded-2xl px-4 py-3 shadow-sm", 
+              message.role === 'user' ? "rounded-br-sm" : "rounded-bl-sm"
+            )}
+            style={{
+              backgroundColor: message.role === 'user' 
+                ? 'hsl(var(--chat-user))' 
+                : 'hsl(var(--chat-assistant))',
+              color: message.role === 'user'
+                ? 'hsl(var(--primary-foreground))'
+                : 'hsl(var(--foreground))'
+            }}
+          >
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+            <p 
+              className="text-xs mt-2"
+              style={{
+                color: message.role === 'user' 
+                  ? 'hsl(var(--primary-foreground) / 0.7)' 
+                  : 'hsl(var(--muted-foreground))'
+              }}
+            >
+              {new Date(message.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          </div>
+        </div>
+      ))
+    )}
+    <div ref={bottomRef} />
+  </div>
+</ScrollArea>
+
+<div 
+  className="border-t p-4"
+  style={{
+    backgroundColor: 'hsl(var(--card))',
+    borderColor: 'hsl(var(--border))'
+  }}
+>
+  {/* Language indicator */}
+  <div className="flex justify-center mb-3">
+    <span 
+      className="text-xs flex items-center gap-1"
+      style={{ color: 'hsl(var(--muted-foreground))' }}
+    >
+      {currentLanguage.flag} {currentLanguage.label}
+    </span>
+  </div>
+
+  {/* Main input row */}
+  <div className="flex items-center gap-2">
+    {/* Filter dropdown */}
+    <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div>
+          <FilterDropdown 
+            onFilterChange={handleFilterChange}
+            currentFilters={searchFilters}
+          />
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>Filter Documents</TooltipContent>
+    </Tooltip>
+
+    {/* Language selector */}
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              style={{
+                borderColor: 'hsl(var(--border))'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.1)';
+                e.currentTarget.style.borderColor = 'hsl(var(--primary))';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '';
+                e.currentTarget.style.borderColor = 'hsl(var(--border))';
+              }}
+            >
+              <Languages className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Select Language</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" className="w-48">
+        {languages.map((lang) => (
+          <DropdownMenuItem
+            key={lang.code}
+            onClick={() => setSelectedLanguage(lang.code)}
+            className="flex items-center gap-2 cursor-pointer"
+            style={{
+              backgroundColor: selectedLanguage === lang.code 
+                ? 'hsl(var(--primary) / 0.1)' 
+                : 'transparent'
+            }}
+          >
+            <span>{lang.flag}</span>
+            <span>{lang.label}</span>
+            {selectedLanguage === lang.code && (
+              <span 
+                className="ml-auto"
+                style={{ color: 'hsl(var(--primary))' }}
+              >
+                ✓
+              </span>
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+
+  {/* Voice input button - Styled like language selector */}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => {/* Add your voice handler */}}
+          className="h-10 w-10 shrink-0"
+          style={{
+            borderColor: 'hsl(var(--border))'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.1)';
+            e.currentTarget.style.borderColor = 'hsl(var(--primary))';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '';
+            e.currentTarget.style.borderColor = 'hsl(var(--border))';
+          }}
+        >
+          <Mic className="h-4 w-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>Voice Input</TooltipContent>
+    </Tooltip>
+
+    {/* Text input */}
+    <div className="flex-1 relative">
+      <Input
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyPress={handleKeyPress}
+        placeholder="Type your question or use voice input..."
+        className="h-10 pr-10"
+        style={{
+          backgroundColor: 'hsl(var(--chat-input-bg))',
+          borderColor: 'hsl(var(--border))'
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.borderColor = 'hsl(var(--primary))';
+          e.currentTarget.style.boxShadow = '0 0 0 3px hsl(var(--primary) / 0.2)';
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.borderColor = 'hsl(var(--border))';
+          e.currentTarget.style.boxShadow = 'none';
+        }}
+      />
+    </div>
+
+    {/* Send button */}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          onClick={handleSend}
+          disabled={!inputValue.trim()}
+          className="h-10 px-4 gap-2"
+          style={{
+            backgroundColor: 'hsl(var(--primary))',
+            color: 'hsl(var(--primary-foreground))'
+          }}
+          onMouseEnter={(e) => {
+            if (!e.currentTarget.disabled) {
+              e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.9)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'hsl(var(--primary))';
+          }}
+        >
+          <Send className="h-4 w-4" />
+          <span className="hidden sm:inline">Send</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>Send Message</TooltipContent>
+    </Tooltip>
+
+    {/* Compare button */}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="secondary"
+          onClick={() => setCompareOpen(true)}
+          className="h-10 px-4 gap-2"
+          style={{
+            backgroundColor: 'hsl(var(--secondary))',
+            color: 'hsl(var(--secondary-foreground))'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'hsl(var(--secondary) / 0.9)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'hsl(var(--secondary))';
+          }}
+        >
+          <GitCompare className="h-4 w-4" />
+          <span className="hidden sm:inline">Compare</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>Compare Topics</TooltipContent>
+    </Tooltip>
+    </TooltipProvider>
+  </div>
+
+  {/* Helper text */}
+  <div className="flex justify-center mt-3">
+    <p 
+      className="text-xs"
+      style={{ color: 'hsl(var(--muted-foreground))' }}
+    >
+      Hybrid search with filters • Voice input • English, Hindi, Tamil & more
+    </p>
+  </div>
+</div>
+</div>
+</div>
+
       
       {compareOpen && <CompareModal open={compareOpen} authToken={authToken} onClose={() => setCompareOpen(false)} />}
     </div>

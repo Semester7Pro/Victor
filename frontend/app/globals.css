@@ -2,8 +2,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@tailwind base;
-@tailwind components;
 @tailwind utilities;
 
 :root {
@@ -184,5 +182,4 @@ html.dark {
     0%, 100% { transform: scaleY(1); }
     50% { transform: scaleY(1.5); }
   }
-}
 }

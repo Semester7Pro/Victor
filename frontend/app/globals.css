@@ -43,7 +43,7 @@
 }
 
 html.dark {
-  --background: #0a0a0a;
+  --background: #ffffff;
   --foreground: #ededed;
   --card-bg: #1a1a1a;
   --border-color: #404040;
@@ -88,26 +88,26 @@ html.dark {
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-}
+  }
 
-body {
+  body {
   transition: background-color 0.3s, color 0.3s;
-}
+  }
 
 /* Light mode overrides */
 html:not(.dark) {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #ffffff;
 }
 
 /* Dark mode */
 html.dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #ffffff;
+  --foreground: #ffffff;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: oklch(1 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);

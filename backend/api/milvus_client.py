@@ -48,19 +48,20 @@ class MilvusClient:
         return collection
     
     async def embed_query_dense(self, query: str) -> List[float]:
+        """Generate dense embedding using Ollama, with online fallback and debug logs"""
         import traceback
         prefer_online = os.getenv("PREFER_ONLINE", "false").lower() == "true"
         online_model = os.getenv("ONLINE_EMBED_MODEL") or os.getenv("EMBEDDING_MODEL")
         openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
         huggingface_key = os.getenv("HUGGINGFACE_API_KEY", "").strip()
-        print(f"[INFO] Embedding request for query: '{query[:60]}...'")
-        print(f"[INFO] Embedding preference: {'ONLINE' if prefer_online else 'OLLAMA (offline)'}")
+        print(f"[DEBUG] PREFER_ONLINE={prefer_online}, ONLINE_EMBED_MODEL={online_model}")
+        print(f"[DEBUG] OPENROUTER_API_KEY set: {bool(openrouter_key)}; HUGGINGFACE_API_KEY set: {bool(huggingface_key)}")
         # Try online first if preferred
         if prefer_online:
             try:
-                print("[INFO] Trying ONLINE embedding provider(s)...")
+                print("[DEBUG] Trying ONLINE embedding provider...")
+                # Try OpenRouter first if key is set
                 if openrouter_key:
-                    print("[INFO] Using OpenRouter for embedding.")
                     import httpx
                     url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1") + "/embeddings"
                     headers = {
@@ -78,15 +79,14 @@ class MilvusClient:
                             print(f"[DEBUG] OpenRouter response keys: {list(data.keys())}")
                             emb = data["data"][0]["embedding"]
                             print(f"[DEBUG] Got embedding of length {len(emb)} from OpenRouter")
-                            print("[SUCCESS] Used OpenRouter for embedding.")
                             return emb
                         else:
                             print(f"[ERROR] OpenRouter embedding failed: {resp.text}")
                     except Exception as e:
                         print(f"[ERROR] Exception during OpenRouter embedding: {e}")
                         traceback.print_exc()
+                # Try HuggingFace if key is set
                 if huggingface_key:
-                    print("[INFO] Using HuggingFace for embedding.")
                     import requests
                     url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{online_model}"
                     headers = {"Authorization": f"Bearer {huggingface_key}"}
@@ -101,22 +101,21 @@ class MilvusClient:
                             # HuggingFace returns a nested list
                             emb = data[0][0] if isinstance(data, list) and isinstance(data[0], list) else data[0]
                             print(f"[DEBUG] Got embedding of length {len(emb)} from HuggingFace")
-                            print("[SUCCESS] Used HuggingFace for embedding.")
                             return emb
                         else:
                             print(f"[ERROR] HuggingFace embedding failed: {resp.text}")
                     except Exception as e:
                         print(f"[ERROR] Exception during HuggingFace embedding: {e}")
                         traceback.print_exc()
-                print("[WARN] No online embedding provider succeeded, falling back to Ollama.")
+                print("[DEBUG] Online embedding failed, falling back to Ollama...")
             except Exception as e:
                 print(f"[ERROR] Exception in online embedding block: {e}")
                 traceback.print_exc()
         # Default: Ollama
         try:
-            print("[INFO] Using Ollama for embedding (offline mode).")
+            print("[DEBUG] Using Ollama for embedding...")
             embeddings = await self.ollama_service.generate_embeddings([query])
-            print(f"[SUCCESS] Used Ollama for embedding.")
+            print(f"[DEBUG] Got embedding of length {len(embeddings[0])} from Ollama")
             return embeddings[0]
         except Exception as e:
             print(f"[ERROR] Ollama embedding failed: {e}")

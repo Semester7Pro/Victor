@@ -3,15 +3,17 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import ThemeToggle from "@/components/ThemeToggle";
+import { Upload, FileText, CheckCircle, Loader2, Sun, Moon, ArrowLeft, X } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { MultiStepLoader } from "@/components/ui/MultiStepLoader";
 
 const PIPELINE_STEPS = [
-  "Uploaded",
-  "Parsing document",
-  "Chunking content",
-  "Generating embeddings",
-  "Indexing in search",
-  "Ready to query"
+  { text: "Uploaded", description: "File received" },
+  { text: "Parsing document", description: "Extracting content" },
+  { text: "Chunking content", description: "Splitting into sections" },
+  { text: "Generating embeddings", description: "Generating vectors" },
+  { text: "Indexing in search", description: "Building search index" },
+  { text: "Ready to query", description: "Available for queries" }
 ];
 
 interface DocumentInfo {
@@ -23,9 +25,9 @@ interface DocumentInfo {
   filename?: string;
 }
 
-export default function Upload() {
+export default function UploadPage() {
   const router = useRouter();
-
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [documents, setDocuments] = useState<Map<string, DocumentInfo>>(new Map());
@@ -201,345 +203,237 @@ export default function Upload() {
     handleFiles(e.dataTransfer.files);
   }, [handleFiles]);
 
+  const removeDocument = (docId: string) => {
+    setDocuments(prev => {
+      const updated = new Map(prev);
+      updated.delete(docId);
+      return updated;
+    });
+  };
+
   const allReady = Array.from(documents.values()).every(doc => doc.ready);
   const documentsArray = Array.from(documents.entries());
-  const totalProgress = documentsArray.length > 0
-    ? documentsArray.reduce((sum, [, doc]) => sum + (doc.progress_step ?? 0), 0) / documentsArray.length
-    : 0;
+
+  // Sync dark mode with HTML class
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-black via-neutral-900 to-black text-white">
-      {/* NAV */}
-      <nav className="flex justify-between items-center px-8 py-6 border-b border-neutral-800/50 backdrop-blur-sm bg-black/30">
-        <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-          Victor
-        </Link>
-        <ThemeToggle />
-      </nav>
+    <div className="min-h-screen bg-background transition-colors duration-300">
+      {/* Tricolor Top Bar */}
+      <div className="h-1.5 w-full tricolor-bar" />
 
-      <section className="max-w-4xl mx-auto px-8 py-16 space-y-8">
-        <header className="text-center space-y-4 animate-fade-in">
-          <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent">
+      {/* Header */}
+      <header className="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="p-2 rounded-lg transition-colors hover:bg-muted text-muted-foreground"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-[hsl(var(--saffron))]/20 to-[hsl(var(--gov-green))]/20">
+                <span className="text-lg font-bold bg-gradient-to-r from-[hsl(var(--saffron))] to-[hsl(var(--gov-green))] bg-clip-text text-transparent">V</span>
+              </div>
+              <span className="font-semibold text-lg text-foreground">Victor</span>
+            </div>
+          </div>
+          
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="p-2.5 rounded-xl transition-all bg-muted hover:bg-muted/80"
+          >
+            {isDarkMode ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-muted-foreground" />}
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-4xl mx-auto px-6 py-12">
+        {/* Title Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-12"
+        >
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-foreground">
             Upload Documents
           </h1>
-          <p className="text-gray-400 text-lg">
+          <p className="text-lg max-w-2xl mx-auto text-muted-foreground">
             Upload one or multiple PDF documents. Victor will parse, understand, and index them automatically.
           </p>
-        </header>
+        </motion.div>
 
-        {/* Upload Box with Drag & Drop */}
-        <div
+        {/* Upload Zone */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className={`relative rounded-2xl border-2 border-dashed transition-all duration-300 ${
+            isDragging 
+              ? 'border-[hsl(var(--saffron))] bg-[hsl(var(--saffron))]/10' 
+              : 'border-border hover:border-muted-foreground bg-card'
+          }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`
-            relative border-2 border-dashed rounded-2xl p-12 text-center space-y-6
-            transition-all duration-300 ease-in-out
-            ${isDragging 
-              ? 'border-blue-400 bg-blue-500/10 scale-[1.02] shadow-2xl shadow-blue-500/20' 
-              : 'border-neutral-700 bg-neutral-900/50 hover:border-neutral-600 hover:bg-neutral-900/70'
-            }
-            ${uploading ? 'pointer-events-none opacity-75' : 'cursor-pointer'}
-          `}
         >
           <input
             type="file"
-            multiple
             accept=".pdf"
+            multiple
             onChange={handleUpload}
-            disabled={uploading}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            disabled={uploading}
             id="file-upload"
           />
-
-          <div className="space-y-4">
-            <div className="flex justify-center">
-              <div className={`
-                w-20 h-20 rounded-full flex items-center justify-center
-                transition-all duration-300
-                ${isDragging 
-                  ? 'bg-blue-500/20 scale-110' 
-                  : 'bg-neutral-800/50'
-                }
-              `}>
-                <svg
-                  className={`w-10 h-10 transition-all duration-300 ${isDragging ? 'text-blue-400 scale-110' : 'text-neutral-400'}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                  />
-                </svg>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xl font-semibold text-white mb-2">
-                {isDragging ? "Drop files here" : "Drag & drop files here"}
-              </p>
-              <p className="text-sm text-gray-400">
-                or <label htmlFor="file-upload" className="text-blue-400 hover:text-blue-300 cursor-pointer underline">browse</label> to select files
-              </p>
-              <p className="text-xs text-gray-500 mt-2">Supports PDF files only</p>
-            </div>
+          
+          <div className="p-12 text-center">
+            <motion.div
+              animate={{ 
+                scale: isDragging ? 1.1 : 1,
+                rotate: isDragging ? 5 : 0
+              }}
+              className="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center bg-gradient-to-br from-[hsl(var(--saffron))]/20 to-[hsl(var(--gov-green))]/20"
+            >
+              <Upload className="w-10 h-10 text-[hsl(var(--saffron))]" />
+            </motion.div>
+            
+            <h3 className="text-xl font-semibold mb-2 text-foreground">
+              {isDragging ? "Drop files here" : "Drag & drop files here"}
+            </h3>
+            <p className="mb-2 text-muted-foreground">
+              or <label htmlFor="file-upload" className="text-[hsl(var(--saffron))] font-medium cursor-pointer hover:underline">browse</label> to select files
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Supports PDF files only
+            </p>
           </div>
 
-          {uploading && (
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-              <div className="text-center space-y-4">
-                <div className="relative w-16 h-16 mx-auto">
-                  <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full"></div>
-                  <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
+          {/* Upload Message */}
+          <AnimatePresence>
+            {message && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="px-6 pb-6"
+              >
+                <div className={`py-3 px-4 rounded-xl text-center font-medium ${
+                  message.includes('Success') 
+                    ? 'bg-[hsl(var(--gov-green))]/10 text-[hsl(var(--gov-green))]' 
+                    : 'bg-destructive/10 text-destructive'
+                }`}>
+                  {message}
                 </div>
-                <p className="text-blue-400 font-semibold animate-pulse">
-                  Uploading {documents.size} file{documents.size !== 1 ? 's' : ''}...
-                </p>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
 
-          {message && (
-            <div className={`
-              absolute bottom-4 left-1/2 transform -translate-x-1/2
-              px-4 py-2 rounded-lg text-sm font-semibold
-              transition-all duration-300 animate-slide-up
-              ${message.includes("failed") 
-                ? "bg-red-500/20 text-red-400 border border-red-500/30" 
-                : "bg-green-500/20 text-green-400 border border-green-500/30"
-              }
-            `}>
-              {message}
-            </div>
-          )}
-        </div>
-
-        {/* Overall Progress Bar */}
-        {documentsArray.length > 0 && (
-          <div className="bg-neutral-900/50 border border-neutral-800 rounded-xl p-6 space-y-4 backdrop-blur-sm">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-white">
-                Processing {documentsArray.length} document{documentsArray.length !== 1 ? 's' : ''}
-              </h3>
-              <span className="text-sm text-gray-400">
-                {Math.round(totalProgress / PIPELINE_STEPS.length * 100)}% Complete
-              </span>
-            </div>
-            <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${(totalProgress / PIPELINE_STEPS.length) * 100}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Pipeline Progress for Each Document */}
-        {documentsArray.length > 0 && (
-          <div className="space-y-4">
-            {documentsArray.map(([docId, docInfo], index) => {
-              const status = docInfo.progress_step ?? 0;
-              const isReady = docInfo.ready ?? false;
-              const currentStage = docInfo.status || "QUEUED";
-              const progressPercent = ((status + 1) / PIPELINE_STEPS.length) * 100;
-
-              return (
-                <div
-                  key={docId}
-                  className={`
-                    bg-neutral-900/50 border rounded-xl p-6 space-y-4
-                    backdrop-blur-sm transition-all duration-300
-                    ${isReady 
-                      ? 'border-green-500/50 bg-green-500/5' 
-                      : 'border-neutral-800 hover:border-neutral-700'
-                    }
-                    animate-slide-in
-                  `}
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  {/* Document Header */}
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className={`
-                          w-2 h-2 rounded-full transition-all duration-300
-                          ${isReady ? 'bg-green-400 animate-pulse' : 'bg-blue-400'}
-                        `} />
-                        <h4 className="text-white font-semibold truncate">
-                          {docInfo.filename || docId}
-                        </h4>
-                      </div>
-                      <div className="text-xs text-gray-400 space-x-3">
-                        <span>ID: {docId}</span>
-                        <span>•</span>
-                        <span>v{docInfo.version}</span>
-                        <span>•</span>
-                        <span className="text-blue-400">{currentStage}</span>
+        {/* Processing Documents */}
+        <AnimatePresence>
+          {documentsArray.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="mt-8 space-y-6"
+            >
+              {documentsArray.map(([docId, doc], index) => {
+                const currentStep = doc.progress_step ?? 0;
+                
+                return (
+                  <motion.div
+                    key={docId}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="rounded-2xl overflow-hidden bg-card border border-border shadow-lg"
+                  >
+                    {/* Document Header */}
+                    <div className="p-5 border-b border-border">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-muted">
+                            <FileText className="w-6 h-6 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">
+                              {doc.filename || docId}
+                            </h4>
+                            <p className="text-sm text-muted-foreground">
+                              v{doc.version} • {doc.status}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                          {doc.ready ? (
+                            <span className="flex items-center gap-1.5 text-[hsl(var(--gov-green))] font-medium text-sm">
+                              <CheckCircle className="w-4 h-4" />
+                              Ready
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1.5 text-[hsl(var(--saffron))] font-medium text-sm">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Processing
+                            </span>
+                          )}
+                          <button
+                            onClick={() => removeDocument(docId)}
+                            className="p-1.5 rounded-lg transition-colors hover:bg-muted text-muted-foreground"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    {isReady && (
-                      <div className="flex items-center gap-2 px-3 py-1 bg-green-500/20 border border-green-500/30 rounded-full">
-                        <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                        <span className="text-green-400 text-sm font-semibold">Ready</span>
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Progress Bar */}
-                  <div className="space-y-2">
-                    <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
-                      <div
-                        className={`
-                          h-full rounded-full transition-all duration-500 ease-out
-                          ${isReady 
-                            ? 'bg-gradient-to-r from-green-500 to-emerald-500' 
-                            : 'bg-gradient-to-r from-blue-500 to-purple-500'
-                          }
-                        `}
-                        style={{ width: `${progressPercent}%` }}
+                    {/* Multi-Step Loader */}
+                    <div className="p-6">
+                      <MultiStepLoader
+                        loadingStates={PIPELINE_STEPS}
+                        loading={true}
+                        value={currentStep}
                       />
                     </div>
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-400">
-                        Step {Math.max(0, status)} of {PIPELINE_STEPS.length - 1}
-                      </span>
-                      <span className="text-gray-500">
-                        {PIPELINE_STEPS[Math.max(0, Math.min(status, PIPELINE_STEPS.length - 1))]}
+                  </motion.div>
+                );
+              })}
+
+              {/* All Ready Banner */}
+              <AnimatePresence>
+                {allReady && documentsArray.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="rounded-2xl bg-gradient-to-r from-[hsl(var(--saffron))]/10 via-card/10 to-[hsl(var(--gov-green))]/10 border border-[hsl(var(--gov-green))]/30 p-6 text-center"
+                  >
+                    <div className="flex items-center justify-center gap-3 mb-2">
+                      <CheckCircle className="w-6 h-6 text-[hsl(var(--gov-green))]" />
+                      <span className="text-lg font-semibold text-foreground">
+                        All documents ready!
                       </span>
                     </div>
-                  </div>
-
-                  {/* Multi-Step Progress Indicator */}
-                  <div className="relative">
-                    <div className="flex justify-between items-center">
-                      {PIPELINE_STEPS.map((step, idx) => (
-                        <div key={step} className="flex-1 flex flex-col items-center">
-                          <div className="relative w-full flex items-center">
-                            {/* Connection Line */}
-                            {idx < PIPELINE_STEPS.length - 1 && (
-                              <div className={`
-                                absolute left-1/2 w-full h-0.5 -z-10
-                                transition-all duration-500
-                                ${idx < status 
-                                  ? 'bg-gradient-to-r from-blue-500 to-purple-500' 
-                                  : 'bg-neutral-700'
-                                }
-                              `} />
-                            )}
-                            
-                            {/* Step Circle */}
-                            <div className={`
-                              relative w-8 h-8 rounded-full flex items-center justify-center
-                              transition-all duration-500
-                              ${idx <= status
-                                ? isReady && idx === PIPELINE_STEPS.length - 1
-                                  ? 'bg-green-500 scale-110 shadow-lg shadow-green-500/50'
-                                  : 'bg-gradient-to-br from-blue-500 to-purple-500 scale-110 shadow-lg shadow-blue-500/50'
-                                : 'bg-neutral-700 scale-100'
-                              }
-                            `}>
-                              {idx < status || (isReady && idx === PIPELINE_STEPS.length - 1) ? (
-                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                              ) : idx === status ? (
-                                <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                              ) : (
-                                <div className="w-2 h-2 bg-neutral-400 rounded-full" />
-                              )}
-                            </div>
-                          </div>
-                          
-                          {/* Step Label */}
-                          <p className={`
-                            mt-2 text-xs text-center max-w-[80px] transition-colors duration-300
-                            ${idx <= status 
-                              ? 'text-white font-medium' 
-                              : 'text-gray-500'
-                            }
-                          `}>
-                            {step}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* All Ready Banner */}
-            {allReady && documentsArray.length > 0 && (
-              <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/50 rounded-xl p-6 text-center backdrop-blur-sm animate-fade-in">
-                <div className="flex items-center justify-center gap-3 mb-2">
-                  <svg className="w-6 h-6 text-green-400 animate-bounce" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                  <p className="text-green-400 font-bold text-lg">
-                    All documents ready!
-                  </p>
-                </div>
-                <p className="text-green-300 text-sm">
-                  Redirecting to chat in 2 seconds...
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-
-      <style jsx>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes slide-up {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes slide-in {
-          from {
-            opacity: 0;
-            transform: translateX(-20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
-        .animate-fade-in {
-          animation: fade-in 0.5s ease-out;
-        }
-
-        .animate-slide-up {
-          animation: slide-up 0.3s ease-out;
-        }
-
-        .animate-slide-in {
-          animation: slide-in 0.4s ease-out both;
-        }
-      `}</style>
-    </main>
+                    <p className="text-sm text-muted-foreground">
+                      Redirecting to chat in 2 seconds...
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+    </div>
   );
 }

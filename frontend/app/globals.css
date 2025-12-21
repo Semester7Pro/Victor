@@ -1,8 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-@layer theme, base, clerk, components, utilities;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --card-bg: #f9f9f9;
@@ -141,10 +143,46 @@ html.dark {
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
+  :where(*, *::before, *::after) {
+    border-color: hsl(var(--border));
   }
+
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Noto Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+}
+
+
+
+@layer utilities {
+  .tricolor-bar {
+    background: linear-gradient(90deg, hsl(var(--saffron)) 0%, hsl(var(--saffron)) 33%, hsl(0, 0%, 100%) 33%, hsl(0, 0%, 100%) 66%, hsl(var(--gov-green)) 66%, hsl(var(--gov-green)) 100%);
+  }
+  
+  .tricolor-border {
+    border-image: linear-gradient(90deg, hsl(var(--saffron)), hsl(0, 0%, 100%), hsl(var(--gov-green))) 1;
+  }
+
+  .animate-pulse-gentle {
+    animation: pulse-gentle 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-gentle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .animate-voice-wave {
+    animation: voice-wave 1s ease-in-out infinite;
+  }
+
+  @keyframes voice-wave {
+    0%, 100% { transform: scaleY(1); }
+    50% { transform: scaleY(1.5); }
+  }
+}
 }

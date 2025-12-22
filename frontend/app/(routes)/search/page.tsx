@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import ThemeToggle from "@/components/ThemeToggle";
+// import ThemeToggle from "@/components/ThemeToggle";
 import { useTheme } from "@/lib/ThemeContext";
-import { PolicyAssistDrafter } from "@/components/PolicyAssistDrafter";
+// import { PolicyAssistDrafter } from "@/components/PolicyAssistDrafter";
 import { useAuth } from "@clerk/nextjs";
 import OrbitalLoader from "@/components/ui/OrbitalLoader";
 import { Button } from "@/components/ui/button";
@@ -197,7 +197,7 @@ export default function PolicyDrafterPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <ThemeToggle />
+            {/* <ThemeToggle /> */}
             <Button
               variant="outline"
               size="sm"
@@ -426,7 +426,7 @@ export default function PolicyDrafterPage() {
                   <div className="space-y-3">
                     {results.sources?.map((source, index) => {
                       const displayFile = source.source_file || "Unknown";
-                      const pageNum = source.page_idx ?? source.page ?? 1;
+                      const pageNum = (source.page_idx ?? 0) + 1;
                       const scorePct = source.score ? Math.round(source.score * 100) : undefined;
 
                       return (
@@ -509,7 +509,7 @@ export default function PolicyDrafterPage() {
     // If page_idx = 0 → PDF page 1
     // If page_idx = 1 → PDF page 2
     // If page_idx = 2 → PDF page 3
-    const pageIdxRaw = s.page_idx ?? s.page ?? 0;
+    const pageIdxRaw = s.page_idx ?? 0;
     const pageNum = pageIdxRaw + 1; // Convert 0-indexed to 1-indexed
     
     console.log("=".repeat(80));

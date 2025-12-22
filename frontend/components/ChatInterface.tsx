@@ -13,7 +13,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import ThemeToggle from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -345,8 +344,8 @@ const dockItems = [
       ),
       label: 'New chat',
       onClick: () => createNewChat(),
-      isActive: createNewChat,
-    },
+      isActive: false,
+    },  
     {
       // 2. View chat history
       icon: (
@@ -589,7 +588,7 @@ const dockItems = [
       </div>
 
       {/* Theme toggle */}
-      <ThemeToggle />
+      {/* <ThemeToggle /> */}
 
       {/* User profile */}
       <div className="flex items-center gap-2">

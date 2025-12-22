@@ -1,171 +1,62 @@
-import * as React from "react";
-import { Slot } from "@radix-ui/react-slot";
-import { cva, type VariantProps } from "class-variance-authority";
+import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
+import { cva, type VariantProps } from "class-variance-authority"
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
   {
     variants: {
       variant: {
-        default: "",
-        destructive: "",
-        outline: "",
-        secondary: "",
-        ghost: "",
-        link: "",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive:
+          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+        outline:
+          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+        secondary:
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        ghost:
+          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        icon: "h-10 w-10",
+        default: "h-9 px-4 py-2 has-[>svg]:px-3",
+        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
+        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
+        icon: "size-9",
+        "icon-sm": "size-8",
+        "icon-lg": "size-10",
       },
     },
     defaultVariants: {
       variant: "default",
       size: "default",
     },
-  },
-);
+  }
+)
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean;
+function Button({
+  className,
+  variant = "default",
+  size = "default",
+  asChild = false,
+  ...props
+}: React.ComponentProps<"button"> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean
+  }) {
+  const Comp = asChild ? Slot : "button"
+
+  return (
+    <Comp
+      data-slot="button"
+      data-variant={variant}
+      data-size={size}
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  )
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "default", size, asChild = false, style, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
-    
-    // Get variant-specific styles
-    const getVariantStyles = () => {
-      switch (variant) {
-        case "default":
-          return {
-            backgroundColor: 'hsl(var(--primary))',
-            color: 'hsl(var(--primary-foreground))',
-          };
-        case "destructive":
-          return {
-            backgroundColor: 'hsl(var(--destructive))',
-            color: 'hsl(var(--destructive-foreground))',
-          };
-        case "outline":
-          return {
-            borderWidth: '1px',
-            borderStyle: 'solid',
-            borderColor: 'hsl(var(--input))',
-            backgroundColor: 'hsl(var(--background))',
-          };
-        case "secondary":
-          return {
-            backgroundColor: 'hsl(var(--secondary))',
-            color: 'hsl(var(--secondary-foreground))',
-          };
-        case "ghost":
-          return {
-            backgroundColor: 'transparent',
-          };
-        case "link":
-          return {
-            color: 'hsl(var(--primary))',
-            textDecoration: 'underline',
-            textUnderlineOffset: '4px',
-          };
-        default:
-          return {};
-      }
-    };
-
-    const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
-      if (props.disabled) return;
-      
-      switch (variant) {
-        case "default":
-          e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.9)';
-          break;
-        case "destructive":
-          e.currentTarget.style.backgroundColor = 'hsl(var(--destructive) / 0.9)';
-          break;
-        case "outline":
-          e.currentTarget.style.backgroundColor = 'hsl(var(--accent))';
-          e.currentTarget.style.color = 'hsl(var(--accent-foreground))';
-          break;
-        case "secondary":
-          e.currentTarget.style.backgroundColor = 'hsl(var(--secondary) / 0.8)';
-          break;
-        case "ghost":
-          e.currentTarget.style.backgroundColor = 'hsl(var(--accent))';
-          e.currentTarget.style.color = 'hsl(var(--accent-foreground))';
-          break;
-        case "link":
-          e.currentTarget.style.textDecoration = 'underline';
-          break;
-      }
-      
-      props.onMouseEnter?.(e);
-    };
-
-    const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
-      const variantStyles = getVariantStyles();
-      
-      switch (variant) {
-        case "default":
-          e.currentTarget.style.backgroundColor = 'hsl(var(--primary))';
-          break;
-        case "destructive":
-          e.currentTarget.style.backgroundColor = 'hsl(var(--destructive))';
-          break;
-        case "outline":
-          e.currentTarget.style.backgroundColor = 'hsl(var(--background))';
-          e.currentTarget.style.color = '';
-          break;
-        case "secondary":
-          e.currentTarget.style.backgroundColor = 'hsl(var(--secondary))';
-          break;
-        case "ghost":
-          e.currentTarget.style.backgroundColor = 'transparent';
-          e.currentTarget.style.color = '';
-          break;
-        case "link":
-          // Link maintains underline
-          break;
-      }
-      
-      props.onMouseLeave?.(e);
-    };
-
-    const handleFocus = (e: React.FocusEvent<HTMLButtonElement>) => {
-      e.currentTarget.style.outline = 'none';
-      e.currentTarget.style.boxShadow = '0 0 0 2px hsl(var(--ring))';
-      props.onFocus?.(e);
-    };
-
-    const handleBlur = (e: React.FocusEvent<HTMLButtonElement>) => {
-      e.currentTarget.style.boxShadow = 'none';
-      props.onBlur?.(e);
-    };
-
-    return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        style={{
-          ...getVariantStyles(),
-          ...style,
-        }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        {...props}
-      />
-    );
-  },
-);
-Button.displayName = "Button";
-
-export { Button, buttonVariants };
+export { Button, buttonVariants }

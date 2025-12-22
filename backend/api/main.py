@@ -16,7 +16,7 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 from api.dependencies import verify_auth_token
 from services.conversation_service import get_conversation_service
-from backend.api.routers import auth
+from api.routers import auth
 from api.milvus_client import get_milvus_client
 from services.full_langchain_service import get_full_langchain_rag
 from pydantic import BaseModel, Field

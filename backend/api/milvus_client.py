@@ -20,6 +20,7 @@ class MilvusClient:
         
         # Use Ollama for embeddings (offline-capable)
         print(f"🔄 Using Ollama for embeddings: {os.getenv('OLLAMA_EMBED_MODEL', 'bge-m3')}")
+        print(f"🔄 Ollama embedding model available: {os.getenv('OLLAMA_EMBED_MODEL', 'bge-m3')} (offline-capable)")
         self.ollama_service = OllamaService()
         
         # Lazy load sparse model only when needed

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/lib/auth-context";
+// import { useAuth } from "@/lib/auth-context";
 import { MessageSquare, BookOpen, History, Search, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,8 @@ interface Message {
 }
 
 export function LeftPanel() {
-  const { token, user } = useAuth();
+  // const { token, user } = useAuth();
+  const token = "dummy-token"; // Placeholder token for development
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);

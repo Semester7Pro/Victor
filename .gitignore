@@ -277,7 +277,6 @@ junit.xml
 *.egg-info/
 dist-info/
 *.whl
-lib/
 lib64/
 parts/
 sdist/

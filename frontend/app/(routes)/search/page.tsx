@@ -426,7 +426,8 @@ export default function PolicyDrafterPage() {
                   <div className="space-y-3">
                     {results.sources?.map((source, index) => {
                       const displayFile = source.source_file || "Unknown";
-                      const pageNum = (source.page_idx ?? 0) + 1;
+                      const pageIdxRaw = source.page_idx ?? source.page ?? 0;
+                      const pageNum = pageIdxRaw + 1;
                       const scorePct = source.score ? Math.round(source.score * 100) : undefined;
 
                       return (
@@ -475,6 +476,9 @@ export default function PolicyDrafterPage() {
                                   <FileText className="w-2.5 h-2.5" />
                                   Page {pageNum}
                                 </span>
+                                              {pageIdxRaw === 0 && (
+                <span className="text-[9px] opacity-60">(0-indexed: {pageIdxRaw})</span>
+              )}
                                 <button
                                   onClick={() => setSelectedSourceIndex(index)}
                                   
@@ -509,7 +513,7 @@ export default function PolicyDrafterPage() {
     // If page_idx = 0 → PDF page 1
     // If page_idx = 1 → PDF page 2
     // If page_idx = 2 → PDF page 3
-    const pageIdxRaw = s.page_idx ?? 0;
+    const pageIdxRaw = s.page_idx ?? s.page ?? 0;
     const pageNum = pageIdxRaw + 1; // Convert 0-indexed to 1-indexed
     
     console.log("=".repeat(80));
@@ -561,14 +565,20 @@ export default function PolicyDrafterPage() {
             </button>
           </div>
 
+
+
           {/* PDF Content */}
           <div className="flex-1 overflow-y-auto p-6">
+            
             {backendPdfUrl ? (
+              
               <PDFViewer 
                 fileUrl={backendPdfUrl} 
                 page={pageNum}  // ✅ Now passing correct 1-indexed page
                 highlightText={s.text} 
+                
               />
+              
             ) : (
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
                 <p className="text-sm text-yellow-800 mb-2">

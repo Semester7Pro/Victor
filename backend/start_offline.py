@@ -91,7 +91,8 @@ def main():
         "api.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True
+        reload=True,
+        reload_excludes=["data/*", "processed/*", "*.npy", "*.npz", "*.log", "*.bin", "*.onnx"]
     )
 
 if __name__ == "__main__":

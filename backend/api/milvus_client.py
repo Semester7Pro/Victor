@@ -26,27 +26,58 @@ class MilvusClient:
         # Lazy load sparse model only when needed
         self._sparse_model = None
         
+        self._connection_alias = "milvus_client"  # ✅ Use unique alias
         self.connect()
         self.collection = self.get_collection()
 
     def connect(self):
         """Connect to Milvus"""
         try:
-            connections.connect("default", host=self.host, port=self.port)
-            print(f"✅ Connected to Milvus at {self.host}:{self.port}")
+            # ✅ Disconnect stale connection if exists
+            if connections.has_connection(self._connection_alias):
+                try:
+                    connections.disconnect(self._connection_alias)
+                except Exception:
+                    pass
+            
+            connections.connect(self._connection_alias, host=self.host, port=self.port)
+            print(f"✅ Connected to Milvus at {self.host}:{self.port} (alias: {self._connection_alias})")
         except Exception as e:
             print(f"❌ Failed to connect to Milvus: {e}")
             raise
     
-    def get_collection(self) -> Collection:
-        """Get collection instance - creates if it doesn't exist"""
+    def _ensure_connection(self):
+        """Ensure Milvus connection is alive, reconnect if needed"""
         try:
-            # Import the creator function
-            from vectorDB.milvus_creator_upload import get_or_create_text_collection
-            
-            # Use the creator function which handles both existing and new collections
-            collection = get_or_create_text_collection(self.collection_name)
-            return collection
+            if not connections.has_connection(self._connection_alias):
+                print("🔄 Milvus connection lost, reconnecting...")
+                self.connect()
+                self.collection = self.get_collection()
+            else:
+                # Verify connection is actually alive
+                utility.list_collections(using=self._connection_alias)
+        except Exception:
+            print("🔄 Milvus connection stale, reconnecting...")
+            self.connect()
+            self.collection = self.get_collection()
+    
+    def get_collection(self) -> Collection:
+        """Get collection instance with connection-aware loading"""
+        try:
+            if utility.has_collection(self.collection_name, using=self._connection_alias):
+                collection = Collection(self.collection_name, using=self._connection_alias)
+                try:
+                    collection.load()
+                except Exception as load_err:
+                    # Collection might already be loaded
+                    print(f"⚠️  Collection load warning (may already be loaded): {load_err}")
+                print(f"✅ Collection '{self.collection_name}' ready ({collection.num_entities} entities)")
+                return collection
+            else:
+                # Try creator function as fallback for new collections
+                from vectorDB.milvus_creator_upload import get_or_create_text_collection
+                collection = get_or_create_text_collection(self.collection_name)
+                return collection
         except Exception as e:
             print(f"❌ Failed to get/create collection: {e}")
             raise
@@ -92,7 +123,7 @@ class MilvusClient:
                 # Try HuggingFace if key is set
                 if huggingface_key:
                     import requests
-                    url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{online_model}"
+                    url = f"https://router.huggingface.co/pipeline/feature-extraction/{online_model}"
                     headers = {"Authorization": f"Bearer {huggingface_key}"}
                     payload = {"inputs": [query]}
                     print(f"[DEBUG] HuggingFace embeddings URL: {url}")
@@ -241,6 +272,9 @@ class MilvusClient:
         print(f"   Method: {method}")
         print(f"   Top-K: {top_k}")
         print(f"   Filter: {filter_expr or 'None'}")
+        
+        # ✅ Ensure connection before every search
+        self._ensure_connection()
         
         try:
             # ✅ Add quality filter (always exclude junk chunks)

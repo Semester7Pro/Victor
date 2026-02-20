@@ -13,7 +13,7 @@ class MilvusService:
         self.settings = get_settings()
         self.embedding_service = EmbeddingService()
         self.collection_name = self.settings.COLLECTION_NAME
-        self.connection_alias = "default"
+        self.connection_alias = "milvus_service"  # ✅ Unique alias to avoid conflicts
         
         # Connect to Milvus
         self._connect()
@@ -21,6 +21,16 @@ class MilvusService:
     def _connect(self):
         """Connect to Milvus"""
         try:
+            # ✅ Don't clobber existing connections
+            if connections.has_connection(self.connection_alias):
+                try:
+                    # Test if connection is alive
+                    utility.list_collections(using=self.connection_alias)
+                    logger.info(f"✅ Milvus already connected (alias: {self.connection_alias})")
+                    return
+                except Exception:
+                    connections.disconnect(self.connection_alias)
+            
             connections.connect(
                 alias=self.connection_alias,
                 host=self.settings.MILVUS_HOST,
@@ -34,8 +44,8 @@ class MilvusService:
     def get_collection(self) -> Collection:
         """Get or create collection"""
         try:
-            if utility.has_collection(self.collection_name):
-                collection = Collection(self.collection_name)
+            if utility.has_collection(self.collection_name, using=self.connection_alias):
+                collection = Collection(self.collection_name, using=self.connection_alias)
                 collection.load()
                 return collection
             else:
@@ -160,7 +170,11 @@ class MilvusService:
     def check_connection(self) -> bool:
         """Check if Milvus is connected"""
         try:
-            return connections.has_connection(self.connection_alias)
+            if connections.has_connection(self.connection_alias):
+                # ✅ Actually verify the connection works
+                utility.list_collections(using=self.connection_alias)
+                return True
+            return False
         except:
             return False
     

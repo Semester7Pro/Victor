@@ -126,6 +126,15 @@ async def lifespan(app: FastAPI):
     logger.info("💡 Automatic fallback enabled")
     logger.info("=" * 60)
     
+    # Pre-load sparse embedding model to avoid first-query delay
+    try:
+        client = get_milvus_client()
+        logger.info("📦 Pre-loading sparse embedding model...")
+        client.embed_query_sparse("warmup")
+        logger.info("✅ Sparse embedding model loaded and ready")
+    except Exception as e:
+        logger.warning(f"⚠️  Sparse model pre-load failed (will retry on first query): {e}")
+    
     yield
     
     # Shutdown

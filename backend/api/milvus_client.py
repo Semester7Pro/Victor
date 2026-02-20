@@ -39,13 +39,17 @@ class MilvusClient:
             raise
     
     def get_collection(self) -> Collection:
-        """Get collection instance"""
-        if not utility.has_collection(self.collection_name):
-            raise ValueError(f"Collection '{self.collection_name}' does not exist")
-        
-        collection = Collection(self.collection_name)
-        collection.load()
-        return collection
+        """Get collection instance - creates if it doesn't exist"""
+        try:
+            # Import the creator function
+            from vectorDB.milvus_creator_upload import get_or_create_text_collection
+            
+            # Use the creator function which handles both existing and new collections
+            collection = get_or_create_text_collection(self.collection_name)
+            return collection
+        except Exception as e:
+            print(f"❌ Failed to get/create collection: {e}")
+            raise
     
     async def embed_query_dense(self, query: str) -> List[float]:
         """Generate dense embedding using Ollama, with online fallback and debug logs"""

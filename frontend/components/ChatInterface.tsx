@@ -211,7 +211,54 @@ export default function ChatInterface({
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || !currentConversation) return;
+    if (!inputValue.trim()) return;
+
+    // Auto-create conversation if none exists
+    let conversationId = currentConversation;
+    if (!conversationId) {
+      try {
+        const response = await fetch(`${API_URL}/conversations`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ title: "New Conversation" }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          conversationId = data.conversation_id;
+          const newConversation: Conversation = {
+            conversation_id: data.conversation_id,
+            title: data.title || "New Conversation",
+            created_at: data.created_at || new Date().toISOString(),
+            updated_at: data.updated_at || new Date().toISOString(),
+            message_count: data.message_count || 0,
+          };
+
+          setConversations([newConversation, ...conversations]);
+          setCurrentConversation(data.conversation_id);
+          setCurrentTitle(data.title || "New Conversation");
+        } else {
+          console.error("Failed to create conversation");
+          toast({
+            title: "Error",
+            description: "Could not create conversation",
+            variant: "destructive",
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("Error creating conversation:", error);
+        toast({
+          title: "Error",
+          description: "Failed to create conversation",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
 
     const userMessage = inputValue;
     setInputValue("");
@@ -228,7 +275,7 @@ export default function ChatInterface({
 
       const requestBody: any = {
         query: userMessage,
-        conversation_id: currentConversation,
+        conversation_id: conversationId,
         top_k: topK,
         temperature,
         method: "hybrid",
@@ -269,12 +316,19 @@ export default function ChatInterface({
           setCurrentTitle(newTitle);
           setConversations((prev) =>
             prev.map((conv) =>
-              conv.conversation_id === currentConversation
+              conv.conversation_id === conversationId
                 ? { ...conv, title: newTitle }
                 : conv
             )
           );
         }
+      } else {
+        console.error("Failed to send message:", response.status);
+        toast({
+          title: "Error",
+          description: "Failed to send message",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Error sending message:", error);

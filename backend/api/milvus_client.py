@@ -20,6 +20,7 @@ class MilvusClient:
         
         # Use Ollama for embeddings (offline-capable)
         print(f"🔄 Using Ollama for embeddings: {os.getenv('OLLAMA_EMBED_MODEL', 'bge-m3')}")
+        print(f"🔄 Ollama embedding model available: {os.getenv('OLLAMA_EMBED_MODEL', 'bge-m3')} (offline-capable)")
         self.ollama_service = OllamaService()
         
         # Lazy load sparse model only when needed
@@ -38,18 +39,92 @@ class MilvusClient:
             raise
     
     def get_collection(self) -> Collection:
-        """Get collection instance"""
-        if not utility.has_collection(self.collection_name):
-            raise ValueError(f"Collection '{self.collection_name}' does not exist")
-        
-        collection = Collection(self.collection_name)
-        collection.load()
-        return collection
+        """Get collection instance - creates if it doesn't exist"""
+        try:
+            # Import the creator function
+            from vectorDB.milvus_creator_upload import get_or_create_text_collection
+            
+            # Use the creator function which handles both existing and new collections
+            collection = get_or_create_text_collection(self.collection_name)
+            return collection
+        except Exception as e:
+            print(f"❌ Failed to get/create collection: {e}")
+            raise
     
     async def embed_query_dense(self, query: str) -> List[float]:
-        """Generate dense embedding using Ollama"""
-        embeddings = await self.ollama_service.generate_embeddings([query])
-        return embeddings[0]
+        """Generate dense embedding using Ollama, with online fallback and debug logs"""
+        import traceback
+        prefer_online = os.getenv("PREFER_ONLINE", "false").lower() == "true"
+        online_model = os.getenv("ONLINE_EMBED_MODEL") or os.getenv("EMBEDDING_MODEL")
+        openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+        huggingface_key = os.getenv("HUGGINGFACE_API_KEY", "").strip()
+        print(f"[DEBUG] PREFER_ONLINE={prefer_online}, ONLINE_EMBED_MODEL={online_model}")
+        print(f"[DEBUG] OPENROUTER_API_KEY set: {bool(openrouter_key)}; HUGGINGFACE_API_KEY set: {bool(huggingface_key)}")
+        # Try online first if preferred
+        if prefer_online:
+            try:
+                print("[DEBUG] Trying ONLINE embedding provider...")
+                # Try OpenRouter first if key is set
+                if openrouter_key:
+                    import httpx
+                    url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1") + "/embeddings"
+                    headers = {
+                        "Authorization": f"Bearer {openrouter_key}",
+                        "Content-Type": "application/json"
+                    }
+                    payload = {"model": online_model, "input": [query]}
+                    print(f"[DEBUG] OpenRouter embeddings URL: {url}")
+                    print(f"[DEBUG] Payload: {payload}")
+                    try:
+                        resp = httpx.post(url, headers=headers, json=payload, timeout=30)
+                        print(f"[DEBUG] OpenRouter response status: {resp.status_code}")
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            print(f"[DEBUG] OpenRouter response keys: {list(data.keys())}")
+                            emb = data["data"][0]["embedding"]
+                            print(f"[DEBUG] Got embedding of length {len(emb)} from OpenRouter")
+                            return emb
+                        else:
+                            print(f"[ERROR] OpenRouter embedding failed: {resp.text}")
+                    except Exception as e:
+                        print(f"[ERROR] Exception during OpenRouter embedding: {e}")
+                        traceback.print_exc()
+                # Try HuggingFace if key is set
+                if huggingface_key:
+                    import requests
+                    url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{online_model}"
+                    headers = {"Authorization": f"Bearer {huggingface_key}"}
+                    payload = {"inputs": [query]}
+                    print(f"[DEBUG] HuggingFace embeddings URL: {url}")
+                    print(f"[DEBUG] Payload: {payload}")
+                    try:
+                        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+                        print(f"[DEBUG] HuggingFace response status: {resp.status_code}")
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            # HuggingFace returns a nested list
+                            emb = data[0][0] if isinstance(data, list) and isinstance(data[0], list) else data[0]
+                            print(f"[DEBUG] Got embedding of length {len(emb)} from HuggingFace")
+                            return emb
+                        else:
+                            print(f"[ERROR] HuggingFace embedding failed: {resp.text}")
+                    except Exception as e:
+                        print(f"[ERROR] Exception during HuggingFace embedding: {e}")
+                        traceback.print_exc()
+                print("[DEBUG] Online embedding failed, falling back to Ollama...")
+            except Exception as e:
+                print(f"[ERROR] Exception in online embedding block: {e}")
+                traceback.print_exc()
+        # Default: Ollama
+        try:
+            print("[DEBUG] Using Ollama for embedding...")
+            embeddings = await self.ollama_service.generate_embeddings([query])
+            print(f"[DEBUG] Got embedding of length {len(embeddings[0])} from Ollama")
+            return embeddings[0]
+        except Exception as e:
+            print(f"[ERROR] Ollama embedding failed: {e}")
+            traceback.print_exc()
+            raise RuntimeError(f"Embedding generation failed: {e}")
     
     def embed_query_sparse(self, query: str) -> Dict[int, float]:
         """

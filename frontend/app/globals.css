@@ -1,8 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
-@layer theme, base, clerk, components, utilities;
+
+@tailwind utilities;
 
 :root {
   --card-bg: #f9f9f9;
@@ -43,7 +45,7 @@
 }
 
 html.dark {
-  --background: #0a0a0a;
+  --background: #22223b;
   --foreground: #ededed;
   --card-bg: #1a1a1a;
   --border-color: #404040;
@@ -88,26 +90,26 @@ html.dark {
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-}
+  }
 
-body {
+  body {
   transition: background-color 0.3s, color 0.3s;
-}
+  }
 
 /* Light mode overrides */
-html:not(.dark) {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  html:not(.dark) {
+    --background: #ffffff;
+    --foreground: #22223b;
+  }
 
 /* Dark mode */
-html.dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-}
+  html.dark, .dark {
+    --background: #22223b;
+    --foreground: #f2e9e4;
+  }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: oklch(1 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
@@ -138,6 +140,48 @@ html.dark {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  :where(*, *::before, *::after) {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Noto Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .tricolor-bar {
+    background: linear-gradient(90deg, hsl(var(--saffron)) 0%, hsl(var(--saffron)) 33%, hsl(0, 0%, 100%) 33%, hsl(0, 0%, 100%) 66%, hsl(var(--gov-green)) 66%, hsl(var(--gov-green)) 100%);
+  }
+
+  .tricolor-border {
+    border-image: linear-gradient(90deg, hsl(var(--saffron)), hsl(0, 0%, 100%), hsl(var(--gov-green))) 1;
+  }
+
+  .animate-pulse-gentle {
+    animation: pulse-gentle 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-gentle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .animate-voice-wave {
+    animation: voice-wave 1s ease-in-out infinite;
+  }
+
+  @keyframes voice-wave {
+    0%, 100% { transform: scaleY(1); }
+    50% { transform: scaleY(1.5); }
+  }
 }
 
 @layer base {

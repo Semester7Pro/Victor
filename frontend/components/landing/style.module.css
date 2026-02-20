@@ -1,0 +1,51 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap");
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  padding: 0;
+  margin: 0;
+  overflow-x: hidden;
+  font-family: "Inter", sans-serif;
+}
+
+.feature-card {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.02),
+    rgba(255, 255, 255, 0)
+  );
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-card:before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+    circle at 50% 0%,
+    rgba(255, 255, 255, 0.1),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  transform: translateY(100%);
+}
+
+.feature-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+.feature-card:hover:before {
+  opacity: 1;
+  transform: translateY(0);
+}
